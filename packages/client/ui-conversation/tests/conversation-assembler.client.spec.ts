@@ -1262,7 +1262,7 @@ describe('ConversationNodeAssembler', () => {
         return null
       },
       start: () => 1,
-      update: (_context, match) => (match.event.data as unknown as { value: number }).value,
+      update: (_context, match) => (match.event.data as { value: number }).value,
       target: 'test',
       buildViewNode: () => null,
     }
@@ -1309,7 +1309,7 @@ describe('ConversationNodeAssembler', () => {
         return null
       },
       start: () => 1,
-      update: (_context, match) => (match.event.data as unknown as { value: number }).value,
+      update: (_context, match) => (match.event.data as { value: number }).value,
       target: 'test',
       buildViewNode: () => null,
     }
@@ -1321,7 +1321,7 @@ describe('ConversationNodeAssembler', () => {
         return null
       },
       start: () => 10,
-      update: (_context, match) => (match.event.data as unknown as { value: number }).value,
+      update: (_context, match) => (match.event.data as { value: number }).value,
       target: 'test',
       buildViewNode: () => null,
     }
@@ -1433,7 +1433,7 @@ describe('ConversationNodeAssembler', () => {
       update: (_context, match) => ({
         turn: 1,
         step: 1,
-        value: (match.event.data as unknown as { value: number }).value,
+        value: (match.event.data as { value: number }).value,
       }),
       buildLocationData: (context, scope) => {
         const state = context.state
@@ -1500,7 +1500,7 @@ describe('ConversationNodeAssembler', () => {
       },
       start: () => ({ value: initialValue }),
       update: (_context, match) => ({
-        value: (match.event.data as unknown as { changed: boolean }).changed
+        value: (match.event.data as { changed: boolean }).changed
           ? changedValue
           : initialValue,
       }),
@@ -1584,13 +1584,13 @@ describe('ConversationNodeAssembler', () => {
       match: (event) => {
         if ((event.type as string) === 'command/run') {
           return {
-            id: (event.data as unknown as { commandId: string }).commandId,
+            id: (event.data as { commandId: string }).commandId,
             role: 'start',
           }
         }
         if ((event.type as string) === 'compaction/start') {
           return {
-            id: (event.data as unknown as { compactionId: string }).compactionId,
+            id: (event.data as { compactionId: string }).compactionId,
             role: 'start',
           }
         }

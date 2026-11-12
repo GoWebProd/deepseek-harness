@@ -135,6 +135,7 @@ const VIEWER_SESSION_READ_ROLE: RemoteAccessRole<'session'> = {
     'session/page',
     'session/projections',
     'session/state',
+    'sessionHistory/info',
     'session/wait',
     'skills/list',
     'toolResults/watch',

@@ -28,6 +28,35 @@ function userNode(index: number, text = `message ${String(index)}`): ChatConvers
 }
 
 describe('Chat Node keyed sources', () => {
+  it('navigates paged external messages without native Turn boundaries and refreshes bounded previews', () => {
+    const builder = new ChatSnapshotBuilder()
+    const message = (index: number, text?: string): ChatConversationViewNode => ({
+      ...userNode(index, text), navigation: { kind: 'message', position: index },
+    })
+    const initial = builder.replace({ nodes: [message(20), message(30)], timeline })
+    expect(initial.navigation.items()).toEqual([
+      { kind: 'message', turn: 20, anchorKey: 'user:20', prompt: 'message 20', response: '' },
+      { kind: 'message', turn: 30, anchorKey: 'user:30', prompt: 'message 30', response: '' },
+    ])
+    expect(initial.timeline.turnOrder).toEqual([])
+    expect(initial.nodes.get('user:20')?.location).toEqual({ kind: 'session' })
+    const opening = initial.navigation.items()
+    const updated = builder.apply({ upserts: [message(30, 'updated')], timeline })
+    expect(updated.navigation.items()[0]).toBe(opening[0])
+    expect(updated.navigation.items()[1]?.prompt).toBe('updated')
+    const beforePaging = updated.navigation.items()
+    const paged = builder.replace({ nodes: [message(5), message(20), message(30, 'updated')], timeline })
+    expect(paged.navigation.items().map(item => item.turn)).toEqual([5, 20, 30])
+    expect(paged.navigation.items()[1]).toBe(beforePaging[0])
+    const unchanged = paged.navigation.items()
+    builder.apply({ upserts: [message(30, 'updated')], timeline })
+    expect(paged.navigation.items()).toBe(unchanged)
+    const hidden = builder.apply({ upserts: [{ ...message(20), visibility: 'hidden' }], timeline })
+    expect(hidden.navigation.items().map(item => item.turn)).toEqual([5, 30])
+    const removed = builder.apply({ upserts: [userNode(30)], timeline })
+    expect(removed.navigation.items().map(item => item.turn)).toEqual([5])
+  })
+
   it('provides ordered projected Nodes and previous values to grouping', () => {
     const builder = new ChatSnapshotBuilder()
     const user = userNode(1)

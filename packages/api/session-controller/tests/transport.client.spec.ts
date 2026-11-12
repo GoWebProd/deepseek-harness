@@ -77,6 +77,11 @@ function assistantFrame(frame: SessionAssistantStreamFrame): SessionFollowFrame 
 function sessionClient(remote: SessionTransportRemote): SessionRemotes {
   return {
     session: remote as SessionRemote,
+    sessionHistory: {
+      info: () => Promise.reject(new Error('native transport tests never discover external history')),
+      page: () => Promise.reject(new Error('native transport tests never read external pages')),
+      observe: () => streamHandle((async function* () { throw new Error('native transport tests never observe external history') })()),
+    },
     $stream: <Item>(options: RemoteStreamOptions<Item>) => (
       new RemoteStream(AVAILABLE_CONNECTION, options)
     ),

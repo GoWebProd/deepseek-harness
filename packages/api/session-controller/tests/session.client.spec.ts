@@ -929,6 +929,7 @@ describe('prompt and cancel errors', () => {
     // The Gateway-only assembly has no commands contribution; this facade test supplies its unary dependency.
     const session = new Session(SID, {
       session: client.ctx.remote.session,
+      sessionHistory: client.ctx.remote.sessionHistory,
       subagents: client.ctx.remote.subagents,
       commands: mock.remote.commands,
       $stream: client.ctx.remote.$stream.bind(client.ctx.remote),
@@ -1108,6 +1109,7 @@ describe('remaining branches', () => {
     const stale = Promise.withResolvers<RemoteResult<SessionEventsPage>>()
     mock.stream(FOLLOW, followScript(() => stale.promise))
     const opening = session.open()
+    await vi.waitFor(() => { expect(mock.log.requests(FOLLOW)).toHaveLength(1) })
     mock.stream(FOLLOW, followScript(history(plainTurn(SessionSeq(0), 0, 'a', 'b'))))
     const resynced = session.resync()
     stale.reject(new Error('stale wire'))
@@ -1120,6 +1122,7 @@ describe('remaining branches', () => {
     const stale = Promise.withResolvers<RemoteResult<SessionEventsPage>>()
     mock.stream(FOLLOW, followScript(() => stale.promise))
     const opening = session.open()
+    await vi.waitFor(() => { expect(mock.log.requests(FOLLOW)).toHaveLength(1) })
     mock.stream(FOLLOW, followScript(history(plainTurn(SessionSeq(6), 1, '新', '代'))))
     const resynced = session.resync()
     stale.resolve(history(plainTurn(SessionSeq(0), 0, '旧', '代'))) // success, but its generation is gone
@@ -1235,6 +1238,7 @@ describe('resync', () => {
     const stale = Promise.withResolvers<RemoteResult<SessionEventsPage>>()
     mock.stream(FOLLOW, followScript(() => stale.promise))
     const firstOpen = session.open()
+    await vi.waitFor(() => { expect(mock.log.requests(FOLLOW)).toHaveLength(1) })
     mock.stream(FOLLOW, followScript(history(plainTurn(SessionSeq(6), 1, '新', '代'))))
     const resynced = session.resync()
     stale.reject(new Error('dead connection')) // the doomed pre-disconnect request fails late

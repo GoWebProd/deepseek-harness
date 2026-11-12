@@ -27,7 +27,7 @@ import type {
   MessageImagesOwnerProps, NodeKey, TurnLocation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
+import { SESSION_FORMAT_VERSION, SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { KeyedSnapshotSelectorHook, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -1497,6 +1497,20 @@ describe('ChatView', () => {
     await waitFor(() => { expect(first.getAttribute('aria-busy')).toBeNull() })
     expect(h.loadThrough.mock.calls).toEqual([[0], [0]])
     expect(view.getByRole('button', { name: '跳转到第 3 轮' }).getAttribute('aria-current')).toBe('true')
+  })
+
+  it('keeps loaded external turns while omitting native journal outline jumps', async () => {
+    const h = makeHarness({ nodes: [userInTurn(4, 'earlier external prompt', 2), assistant(5, 'earlier external response', 2), userInTurn(8, 'external prompt', 3), assistant(9, 'external response', 3)] }, {
+      hasMore: true,
+      historySource: { kind: 'external', sourceId: 'fixture-source', capabilities: { nativeJournal: false },
+        header: { version: SESSION_FORMAT_VERSION, id: SID, createdAt: 0, isSeeded: false } },
+    })
+    h.setOutline([{ turn: 1, seq: 0, prompt: 'native-only prompt', response: 'native-only response' }])
+    const view = render(<h.ChatView {...h.props} />)
+    expect(await view.findByRole('button', { name: '跳转到第 3 轮' })).toBeTruthy()
+    expect(view.queryByRole('button', { name: '加载并跳转到第 1 轮' })).toBeNull()
+    expect(view.getByText('external response')).toBeTruthy()
+    expect(h.loadThrough).not.toHaveBeenCalled()
   })
 
   it('uses a known turn landing without hit testing or consuming rail scroll as transcript input', async () => {
@@ -3761,6 +3775,17 @@ describe('ChatView', () => {
     expect(view.getAllByRole('button', { name: '复制' }).length).toBeGreaterThan(0)
     expect(view.queryByRole('button', { name: '在新对话中分支' })).toBeNull()
     expect(useAccess).toHaveBeenCalledWith('session/fork')
+  })
+
+  it('keeps content actions while omitting native fork for external display positions', () => {
+    const h = makeHarness({ nodes: [user(1, 'question'), assistant(2, 'answer')], turnEnds: new Map([[1, 3]]) }, {
+      historySource: { kind: 'external', sourceId: 'fixture-source', capabilities: { nativeJournal: false },
+        header: { version: SESSION_FORMAT_VERSION, id: SID, createdAt: 0, isSeeded: false } },
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getAllByRole('button', { name: '复制' }).length).toBeGreaterThan(0)
+    expect(view.queryByRole('button', { name: '在新对话中分支' })).toBeNull()
+    expect(h.forkAt).not.toHaveBeenCalled()
   })
 
   it('renders assistant Markdown across history, streaming, final, and interrupted states while user text stays literal', () => {

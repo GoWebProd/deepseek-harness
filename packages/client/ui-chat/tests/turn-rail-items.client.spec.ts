@@ -9,6 +9,11 @@ function loadedItem(turn: number, prompt = `p${String(turn)}`, response = `r${St
 }
 
 describe('mergeTurnRailItems', () => {
+  it('preserves display-only message marks without a native outline', () => {
+    expect(mergeTurnRailItems([{ ...loadedItem(9), kind: 'message' }], undefined)).toEqual([
+      { turn: 9, kind: 'message', prompt: 'p9', response: 'r9', anchor: { kind: 'loaded', key: 'anchor-9' } },
+    ])
+  })
   it('returns a stable empty array when both sides are empty', () => {
     expect(mergeTurnRailItems([], undefined)).toBe(mergeTurnRailItems([], []))
   })

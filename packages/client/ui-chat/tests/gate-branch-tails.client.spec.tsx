@@ -3,6 +3,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
+import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
 import { useDetailedPresentation } from './presentation-fixture.client.ts'
@@ -48,11 +50,18 @@ describe('render branch tails', () => {
     ] as const
     const snap = chatSnapshotFixture({ nodes })
     const source = { getSnapshot: () => snap, subscribe: () => () => {} }
+    const session: SessionSnapshot = {
+      sessionId: SessionId('stats-native-session'), pendingSubmissions: [], running: false, subagent: null,
+      removed: false, openState: 'open', openError: null, hasMore: false, loadingOlder: false,
+      historyWasPartial: false, historyLoadStatus: 'idle',
+      promptError: null, blank: false, lastAgentError: null, promptAttempted: true, awaitingFirstTurn: false,
+    }
     const pillProps: StatPillProps = {
       usePerformanceUsage: selector => selector('detailed'),
       t,
       useChat: bindSnapshotSelector(source),
       useProjection: () => undefined,
+      useSession: bindSnapshotSelector({ getSnapshot: () => session, subscribe: () => () => {} }),
     }
     const view = render(
       <>

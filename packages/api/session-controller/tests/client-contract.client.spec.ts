@@ -1,9 +1,9 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import type { PromptContentPart as AttachmentPromptContentPart } from '@deepseek-ai/dsh-attachment/types'
-import { SessionSeq, type SessionId, type SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
+import { SessionSeq, type PluginRecordType, type SessionEvent, type SessionId, type SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
 import {
   MutableSessionEventSource, type SessionAssistantSettlementEntry,
-  type SessionLiveEventEntry, type SessionTransientEventEntry,
+  type IgnorablePluginRecordEvent, type SessionEventLike, type SessionLiveEventEntry, type SessionTransientEventEntry,
 } from '../src/client/contract/events.ts'
 import { LlmAttemptId } from '@deepseek-ai/dsh-llm/brand'
 import type { ISession } from '../src/client/contract/session.ts'
@@ -57,6 +57,21 @@ function assistantSettlement(seq: SessionSeq): SessionAssistantSettlementEntry {
 }
 
 describe('Client Session contracts', () => {
+  it('admits owner-validated ignorable plugin display records outside native persistence events', () => {
+    const event: IgnorablePluginRecordEvent = {
+      type: 'plugin:fixture/display-delta', seq: SessionSeq(3), time: 1, ignorable: true,
+      data: { textDelta: 'external' }, surfaceOp: { opaque: true }, sourceEventSeqs: 'opaque',
+    }
+    const feed = new MutableSessionEventSource()
+    feed.append({ type: 'event', event })
+    const displayed: SessionEventLike = feed.getSnapshot().entries[0]!.event
+    expect(displayed.type === 'plugin:fixture/display-delta').toBe(true)
+    expect(feed.getSnapshot().change).toEqual({ kind: 'append', entries: [{ type: 'event', event }] })
+    expectTypeOf<Extract<SessionEventLike, IgnorablePluginRecordEvent>>().toEqualTypeOf<IgnorablePluginRecordEvent>()
+    expectTypeOf(event.data).toBeUnknown()
+    expectTypeOf<Extract<SessionEvent, { type: PluginRecordType }>>().toEqualTypeOf<never>()
+  })
+
   it('requires branded Session positions at internal event fixture boundaries', () => {
     expectTypeOf(entry).parameter(0).toEqualTypeOf<SessionSeq>()
     expectTypeOf(ev.user).parameter(0).toEqualTypeOf<SessionSeq>()

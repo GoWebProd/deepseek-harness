@@ -136,6 +136,7 @@ export function fileRef(id: string, name = 'notes.txt'): FileAttachmentRef {
 /** Default answers: every command accepted, empty history and subagent catalog, one attachment of one zero byte. */
 export const sessionWorld: RemoteTable = {
   unary: {
+    'sessionHistory/info': ok({ kind: 'native' }),
     'session/prompt': ok({ accepted: true }),
     'session/cancel': ok({ accepted: true }),
     'session/updateQueue': ok({ accepted: true }),

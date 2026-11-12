@@ -15,7 +15,7 @@ import { isAtOrOutside } from '../contract/group-tree.ts'
 import { locationCoordinates } from './common.ts'
 import { sessionRecallLabels, skillInvocationName } from './event-projection.ts'
 import { GroupTreeSegments } from './group-tree-segments.ts'
-import { sameTurnNavigationItem, turnNavigationItem } from './turn-navigation.ts'
+import { messageNavigationItem, sameTurnNavigationItem, turnNavigationItem } from './turn-navigation.ts'
 import { ChatTurnProcessProjector } from './turn-process-presentation.ts'
 
 const EMPTY_KEYS: readonly string[] = []
@@ -377,9 +377,21 @@ class MutableTurnNavigationIndex implements ChatTurnNavigationIndex {
     timeline: ConversationTimelineSnapshot,
     locations: ChatLocationNodeIndex,
     nodes: ChatNodeStore,
+    order: readonly string[],
   ): void {
     const next: TurnNavigationItem[] = []
     const byTurn = new Map<number, TurnNavigationItem>()
+    if (timeline.turnOrder.length === 0) {
+      for (const key of order) {
+        const node = nodes.get(key)
+        const derived = node === undefined ? undefined : messageNavigationItem(node)
+        if (derived === undefined) continue
+        const previous = this.byTurn.get(derived.turn)
+        const item = previous !== undefined && sameTurnNavigationItem(previous, derived) ? previous : derived
+        next.push(item)
+        byTurn.set(item.turn, item)
+      }
+    }
     for (const turn of timeline.turnOrder) {
       const derived = turnNavigationItem(turn, locations, nodes)
       if (derived === undefined) continue
@@ -399,9 +411,18 @@ class MutableTurnNavigationIndex implements ChatTurnNavigationIndex {
     turns: ReadonlySet<number>,
     locations: ChatLocationNodeIndex,
     nodes: ChatNodeStore,
+    upserts: readonly ChatConversationViewNode[],
   ): void {
-    if (turns.size === 0) return
+    const messages = new Map(upserts.filter(node => node.navigation !== undefined).map(node => [node.key, node]))
+    if (turns.size === 0 && messages.size === 0) return
     const next = this.current.map((item) => {
+      if (item.kind === 'message') {
+        const node = messages.get(item.anchorKey)
+        const derived = node === undefined ? undefined : messageNavigationItem(node)
+        if (derived === undefined || sameTurnNavigationItem(item, derived)) return item
+        this.byTurn.set(item.turn, derived)
+        return derived
+      }
       if (!turns.has(item.turn)) return item
       const derived = turnNavigationItem(item.turn, locations, nodes)
       if (derived === undefined || sameTurnNavigationItem(item, derived)) return item
@@ -1117,7 +1138,7 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
     this.locations.rebuild(this.order, this.store)
     this.store.replaceProcesses(this.order, this.locations)
     this.store.settleBottom(input.timeline.turnOrder, this.locations)
-    this.navigation.rebuild(input.timeline, this.locations, this.store)
+    this.navigation.rebuild(input.timeline, this.locations, this.store, this.order)
     this.timeline = input.timeline
     this.latestGroupInput = {
       kind: 'replace',
@@ -1149,6 +1170,7 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
         || previous.anchorSeq !== node.anchorSeq
         || previous.visibility !== node.visibility
         || previous.groupTree !== node.groupTree
+        || previous.navigation?.position !== node.navigation?.position
         || locationIdentity(previous.location) !== locationIdentity(node.location)
       structural ||= nodeStructural
       if (!nodeStructural) contentOnly.push(node)
@@ -1170,9 +1192,9 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
     this.store.updateProcesses(processTurns, this.locations)
     this.store.settleBottom(input.timeline.turnOrder, this.locations)
     if (structural || input.timeline !== this.timeline) {
-      this.navigation.rebuild(input.timeline, this.locations, this.store)
+      this.navigation.rebuild(input.timeline, this.locations, this.store, this.order)
     } else {
-      this.navigation.touch(turnsOf(contentOnly), this.locations, this.store)
+      this.navigation.touch(turnsOf(contentOnly), this.locations, this.store, contentOnly)
     }
     this.timeline = input.timeline
     this.latestGroupInput = {

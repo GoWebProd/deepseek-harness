@@ -38,6 +38,7 @@ export interface SessionSubagentsRemote {
 /** Generated Remote namespaces consumed by the Client Session object layer. */
 export interface SessionRemotes {
   readonly $stream: ClientRemote['$stream']
+  readonly sessionHistory: ClientRemote['sessionHistory']
   readonly commands: SessionCommandsRemote
   readonly session: SessionRemote
   readonly subagents: SessionSubagentsRemote

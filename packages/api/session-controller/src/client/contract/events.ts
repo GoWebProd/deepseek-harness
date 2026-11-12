@@ -1,7 +1,7 @@
 /** Observable contiguous Session event window consumed by domain assemblers. */
 import { notifySubscribers, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { LlmAttemptId, StreamChunk } from '@deepseek-ai/dsh-llm'
-import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
+import type { PluginRecordType, SessionEvent, SessionSeq } from '@deepseek-ai/dsh-session/types'
 
 /** Client-only live chunk presentation; `seq` orders the transient row between durable Session seqs. */
 export interface AssistantLiveChunkEvent {
@@ -16,12 +16,23 @@ export interface AssistantLiveChunkEvent {
   }
 }
 
-/** Current durable Session event or one client-only live chunk presentation. */
-export type SessionEventLike = SessionEvent | AssistantLiveChunkEvent
+/** Owner-validated informational plugin display record outside native journal semantics. */
+export interface IgnorablePluginRecordEvent {
+  readonly type: PluginRecordType
+  readonly seq: SessionSeq
+  readonly time: number
+  readonly ignorable: true
+  readonly data: unknown
+  readonly surfaceOp?: unknown
+  readonly sourceEventSeqs?: unknown
+}
+
+/** Native or plugin display event, or one client-only live chunk presentation. */
+export type SessionEventLike = SessionEvent | IgnorablePluginRecordEvent | AssistantLiveChunkEvent
 
 /** Client history entry retaining its coarse transport discriminator. */
 export type SessionEventLikeEntry =
-  | { readonly type: 'event'; readonly event: SessionEvent }
+  | { readonly type: 'event'; readonly event: SessionEvent | IgnorablePluginRecordEvent }
   | { readonly type: 'transient'; readonly event: AssistantLiveChunkEvent }
 
 /** Scalar live entry accepted by append-only Client paths. */

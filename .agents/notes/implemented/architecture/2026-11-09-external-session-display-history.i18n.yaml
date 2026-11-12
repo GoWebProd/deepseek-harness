@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-09-external-session-display-history.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-09-external-session-display-history.md
+/agent-note-external-session-display-history:
+  en: 7c8217616827a67f
+  zh: 68a742b544a67321
+/agent-note-external-session-display-history/problem:
+  en: 14b5d3d821fe2b64
+  zh: 35e35181f311cd60
+/agent-note-external-session-display-history/decision:
+  en: f281f8fa7e564f87
+  zh: 59edbcaeb77c72b6
+/agent-note-external-session-display-history/alternatives-considered:
+  en: 3a2f2332565b762d
+  zh: e538ea0449aae972
+/agent-note-external-session-display-history/consequences:
+  en: 348399380e8964ea
+  zh: c91cd0d1a8a94da3

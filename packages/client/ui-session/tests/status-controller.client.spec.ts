@@ -10,6 +10,7 @@ const parentId = 'status-parent' as SessionId
 const childId = 'status-child' as SessionId
 
 it('preserves unlisted child status through metadata updates and main view acknowledgement', async ({ mock, start }) => {
+  mock.remote.sessionHistory.info.mockResolvedValue(ok({ kind: 'native' }))
   mock.remote.session.list.mockResolvedValue(ok({ items: [{
     sessionId: parentId, updatedAt: 1, running: false, blank: false, agentAvailable: true,
   }] }))

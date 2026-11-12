@@ -1,9 +1,14 @@
 import type { Context } from '@deepseek-ai/cordis'
+import type { IgnorablePluginRecordEvent, SessionEventLike } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
   ConversationNodeDefinition, RequestPromptInspector, SystemPromptState, SystemPromptInspector,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { trajectoryNode } from './trajectory-definition-common.ts'
 import type { TrajectoryRequestHeaderState } from './trajectory-contract.ts'
+
+function isIgnorablePluginRecordEvent(event: SessionEventLike): event is IgnorablePluginRecordEvent {
+  return event.type.startsWith('plugin:') && 'ignorable' in event && event.ignorable
+}
 
 /** Loaded system surface plus the latest request facts changed by an append or compaction. */
 export interface TrajectorySystemMessageState extends SystemPromptState {
@@ -33,12 +38,12 @@ function trajectorySystemMessageDefinition(inspect: SystemPromptInspector): Conv
   return {
     kind: 'trajectory-system-message',
     target: 'trajectory',
-    match: event => event.type === 'system/message'
-      || ('surfaceOp' in event && event.surfaceOp !== 'append')
+    match: event => !isIgnorablePluginRecordEvent(event) && (event.type === 'system/message'
+      || ('surfaceOp' in event && event.surfaceOp !== 'append'))
       ? { id: String(event.seq), role: 'start' }
       : null,
     start: (_context, match, reader) => {
-      if (match.event.type === 'assistant/live-chunk') throw new Error('system-message requires a durable event')
+      if (match.event.type === 'assistant/live-chunk' || isIgnorablePluginRecordEvent(match.event)) throw new Error('system-message requires a durable event')
       const prior = reader.previous<TrajectorySystemMessageState>('trajectory-system-message')?.state
       const state = inspect(prior, match.event)
       const node = state.effective

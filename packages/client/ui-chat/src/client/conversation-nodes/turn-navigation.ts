@@ -1,5 +1,5 @@
 import { isVisibleChatNode } from '../contract/chat-visibility.ts'
-import type { ChatNode } from '../contract/chat-nodes.ts'
+import type { ChatConversationViewNode, ChatNode } from '../contract/chat-nodes.ts'
 import type { ChatLocationNodeIndex, ChatNodeStore, TurnNavigationItem } from '../contract/snapshot.ts'
 
 /**
@@ -66,7 +66,20 @@ export function sameTurnNavigationItem(
 ): boolean {
   if (left === undefined || right === undefined) return left === right
   return left.turn === right.turn && left.anchorKey === right.anchorKey
+    && left.kind === right.kind
     && left.prompt === right.prompt && left.response === right.response
+}
+
+/** Project a display mark without a native Turn location.
+ * @param node - final Chat row with an optional message position.
+ * @returns a bounded navigation mark. */
+export function messageNavigationItem(node: ChatConversationViewNode): TurnNavigationItem | undefined {
+  const chatNode = node as ChatNode
+  if (node.navigation === undefined || node.location.kind !== 'session' || !isVisibleChatNode(chatNode)) return undefined
+  return {
+    kind: 'message', turn: node.navigation.position, anchorKey: node.key,
+    prompt: promptText(chatNode), response: responseText(chatNode),
+  }
 }
 
 /**

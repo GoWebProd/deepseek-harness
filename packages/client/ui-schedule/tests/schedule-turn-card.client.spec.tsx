@@ -13,7 +13,7 @@ import {
   type ConversationTimelineSnapshot, type ConversationTurnDataMap,
   type ConversationViewDefinition, type ConversationViewNode, type ToolResultNode, type TurnLocation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { SessionLiveEventEntry } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { SessionEventLike, SessionLiveEventEntry } from '@deepseek-ai/dsh-api-session-controller/client'
 import { createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ScheduleId, ScheduleCatalogEntry } from '@deepseek-ai/dsh-schedule/client'
@@ -591,11 +591,11 @@ describe('ScheduleTurnCard', () => {
 describe('schedule-created Definition lifecycle', () => {
   const location = { kind: 'session' } as const
 
-  function updateMatch(event: SessionEvent): ConversationMatch {
+  function updateMatch(event: SessionEventLike): ConversationMatch {
     return { event, role: 'update', location }
   }
 
-  function startMatch(event: SessionEvent): ConversationStartMatch {
+  function startMatch(event: SessionEventLike): ConversationStartMatch {
     return { event, role: 'start', location }
   }
 

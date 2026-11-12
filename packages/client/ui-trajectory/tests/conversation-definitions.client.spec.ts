@@ -1,13 +1,14 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import type {
-  SessionEventLikeEntry, SessionLiveEventEntry,
+  IgnorablePluginRecordEvent, SessionEventLikeEntry, SessionLiveEventEntry,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
   ConversationNodeDefinition, ConversationViewDefinition,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ConversationNodeAssembler, inspectRequestPrompt } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
+import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import { inspectSystemPrompt } from '../../ui-conversation/src/client/contract/system-prompt.ts'
 import { AssistantStreamAccumulator } from '@deepseek-ai/dsh-llm/assistant-stream'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -126,8 +127,8 @@ function packedInputs(entries: readonly SessionLiveEventEntry[]): SessionEventLi
       output.push({
         ...entry,
         event: {
-          ...entry.event,
-          data: { ...entry.event.data, stream: current.stream.snapshot() },
+          ...event,
+          data: { ...event.data, stream: current.stream.snapshot() },
         } as SessionEvent,
       })
       active = undefined
@@ -1140,6 +1141,13 @@ describe('Trajectory conversation Definitions', () => {
 
     expect(definition.match(invalidStart.event)).toBeNull()
     expect(definition.update({ state } as never, invalidStart)).toBe(state)
+    const plugin: IgnorablePluginRecordEvent = {
+      type: 'plugin:fixture/display-delta', seq: SessionSeq(2), time: 2, ignorable: true,
+      data: null, surfaceOp: { opaque: true },
+    }
+    expect(definition.match(plugin)).toBeNull()
+    expect(() => definition.start({} as never, { event: plugin, role: 'start', location: { kind: 'session' } }, {} as never))
+      .toThrow('system-message requires a durable event')
 
     const header = DEFINITIONS.find(candidate => candidate.kind === 'trajectory-request-header')
     if (header === undefined) throw new Error('trajectory-request-header Definition is not registered')

@@ -8,7 +8,9 @@ This page defines the data model and the extension path for a business-owned Con
 
 ## Data model and ownership
 
-The Session Controller owns the contiguous loaded logical-event window. Each `SessionEventLikeEntry` is either `{ type: 'event', event: SessionEvent }` for one durable event or `{ type: 'transient', event: AssistantLiveChunkEvent }` for one Client-only `assistant/live-chunk` presentation. Both inner events expose `type`, `seq`, `time`, and `data`. `ui-conversation` passes these entries to the assembler without opening a second history stream. One `ConversationNodeAssembler` per Session applies every registered Definition and publishes an independent source for each registered view target.
+The Session Controller owns the loaded, ordered logical-event window. For native history, each `SessionEventLikeEntry` is either `{ type: 'event', event: SessionEvent }` for one durable event or `{ type: 'transient', event: AssistantLiveChunkEvent }` for one Client-only `assistant/live-chunk` presentation. Both inner events expose `type`, `seq`, `time`, and `data`. `ui-conversation` passes these entries to the assembler without opening a second history stream. One `ConversationNodeAssembler` per Session applies every registered Definition and publishes an independent source for each registered view target.
+
+[External display history](../../packages/api/session-controller/README.md#external-display-history) supplies presentation events through the same window without adding them to a native Session log. Its ordered positions and source generation belong only to display; native metadata projection cursors remain separate. Source-specific Definitions and renderers consume these facts. Their presence does not establish exact model requests, native fork positions, or replay availability.
 
 | Concept | Owner and purpose |
 |---|---|

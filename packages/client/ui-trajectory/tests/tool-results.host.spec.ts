@@ -1,7 +1,8 @@
 /** Live tool inspection shares the real Session's unload lifetime, never its replay data. */
 import { Context } from '@deepseek-ai/cordis'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
-import { expect, it, onTestFinished } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vitest'
+import { ExternalHistoryController, type ExternalHistorySource } from '@deepseek-ai/dsh-api-session-controller/src/external-history.ts'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -62,6 +63,43 @@ it('defaults to 1000 results and rejects invalid count limits', () => {
   for (const maxResultsPerSession of [0, -1, 1.5, Infinity]) {
     expect(() => SessionToolResults.Config({ maxResultsPerSession })).toThrow()
   }
+})
+
+it('rejects external display positions before reading a colliding retained native value', async () => {
+  const { ctx, agent, execute, watch } = await setup()
+  const event = await execute()
+  await ctx.plugin(ExternalHistoryController)
+  const registry = ctx.get('sessionHistory')
+  if (registry === undefined) throw new Error('External history registry missing')
+  const external: ExternalHistorySource = {
+    header: { version: 3, id: agent.id, createdAt: 1, cwd: '/external', isSeeded: false },
+    page: vi.fn(async () => ({ generation: 'external', entries: [], hasMore: false })),
+    observe: vi.fn(async function* () {
+      yield { type: 'replace' as const, page: { generation: 'external', entries: [], hasMore: false } }
+    }),
+    activate: vi.fn(async () => agent),
+  }
+  const pageRead = vi.spyOn(external, 'page')
+  const observation = vi.spyOn(external, 'observe')
+  const activation = vi.spyOn(external, 'activate')
+  registry.register(ctx, { id: 'external-result-fixture', resolve: async address =>
+    address.kind === 'session' && address.sessionId === agent.id ? external : undefined })
+  const nativeLookup = vi.spyOn(ctx.sessions, 'get')
+  await expect(watch(event.seq).next()).rejects.toMatchObject({
+    code: 'session/external-history-unsupported',
+    details: { sessionId: agent.id, operation: 'toolResults/watch' },
+  })
+  expect(nativeLookup).not.toHaveBeenCalled()
+  expect(pageRead).not.toHaveBeenCalled()
+  expect(observation).not.toHaveBeenCalled()
+  expect(activation).not.toHaveBeenCalled()
+})
+
+it('keeps native retained values available when the history registry delegates ownership', async () => {
+  const { ctx, execute, watch } = await setup()
+  const event = await execute()
+  await ctx.plugin(ExternalHistoryController)
+  expect((await watch(event.seq).next()).value).toEqual({ available: true, value: { answer: 42 } })
 })
 
 it('retains the latest 1000 results and invalidates an inspector when its result is evicted', async () => {
