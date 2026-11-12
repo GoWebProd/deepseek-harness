@@ -12,6 +12,7 @@ import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
 import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-typert-registry'
+import type { ExternalHistoryController } from './external-history.ts'
 
 /** Cold Session identity absent from persistence. */
 export class ApiSessionNotFound extends Error {}
@@ -51,6 +52,8 @@ export class ApiSessionPresetConflict extends Error {
 
 /** A blank Session chosen for reuse started a turn before this Host acquired its writer. */
 class ApiSessionStartedSinceObserved extends Error {}
+
+class ApiSessionExternalActivationError extends Error {}
 
 /** Placement and Agent preset for one Session created for a new conversation. */
 export interface ApiSessionCreateRequest {
@@ -119,7 +122,7 @@ export class ApiSessionAgentController {
   private readonly imageAdmissionChains = new WeakMap<Agent, Promise<void>>()
 
   /** @param ctx - Host context carrying Agent, model, persistence, and Typert services. */
-  constructor(private readonly ctx: Context) {}
+  constructor(private readonly ctx: Context, private readonly externalHistory?: ExternalHistoryController) {}
 
   /**
    * Configure Session and Agent lookups for Typert.
@@ -184,6 +187,9 @@ export class ApiSessionAgentController {
       const published = this.liveAgent(sessionId)
       return published ?? { agent }
     } catch (error: unknown) {
+      if (error instanceof ApiSessionExternalActivationError) {
+        return { error: new RemoteError('gateway/internal', error.message, {}, { cause: error.cause }) }
+      }
       if (error instanceof ApiSessionNotFound) {
         return { error: new RemoteError('session/not-found', error.message, { sessionId }) }
       }
@@ -282,6 +288,10 @@ export class ApiSessionAgentController {
   }
 
   private async resume(sessionId: SessionId, supplied?: SessionObservation): Promise<Agent> {
+    const external = await this.externalHistory?.activate(sessionId).catch((error: unknown) => {
+      throw new ApiSessionExternalActivationError(`External activation failed for session "${sessionId}"`, { cause: error })
+    })
+    if (external !== undefined) return external
     if (supplied !== undefined) return this.resumeObserved(sessionId, supplied)
     try {
       using observation = await this.ctx.sessionQuery.observeSession(sessionId)
@@ -293,6 +303,14 @@ export class ApiSessionAgentController {
       }
       throw error
     }
+  }
+
+  /** Reject native journal operations for externally owned display history.
+   * @param sessionId - journal operation target.
+   * @param operation - native operation name.
+   */
+  async assertNativeHistory(sessionId: SessionId, operation: string): Promise<void> {
+    await this.externalHistory?.assertNative(sessionId, operation)
   }
 
   private async resumeObserved(

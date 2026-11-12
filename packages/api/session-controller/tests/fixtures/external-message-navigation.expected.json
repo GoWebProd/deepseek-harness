@@ -1,0 +1,9 @@
+[
+  {
+    "kind": "message",
+    "turn": 100,
+    "anchorKey": "15:fixture-displaymessage",
+    "prompt": "External message",
+    "response": ""
+  }
+]

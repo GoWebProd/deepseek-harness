@@ -8,6 +8,7 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import { SessionLogModel } from '../src/client/views/session-log/model.ts'
 import { InspectorTableHierarchy } from '../src/client/views/table-model.ts'
 import { SessionLogGroups } from '../src/client/views/session-log/groups.ts'
+import { sessionLogChatTarget } from '../src/client/views/session-log/chat-target.ts'
 
 const attemptId = 'attempt-1' as LlmAttemptId
 const durable = (seq: number): SessionEventLikeEntry => ({
@@ -16,6 +17,25 @@ const durable = (seq: number): SessionEventLikeEntry => ({
 const delta = (seq: number, text: string): SessionEventLikeEntry => ({
   type: 'transient', event: { type: 'assistant/live-chunk', seq, time: seq,
     data: { attemptId, turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text } } },
+})
+
+it('retains opaque plugin display payloads without deriving native turn or tool coordinates', () => {
+  const source = new MutableSessionEventSource()
+  source.replace([null, 'opaque', 42, { turn: 7, step: 2, subCallId: 'external' }].map((data, index) => ({
+    type: 'event', event: { type: 'plugin:fixture/display', seq: SessionSeq(index + 1), time: 1,
+      ignorable: true, data, surfaceOp: { opaque: true }, sourceEventSeqs: 'opaque' },
+  })), false)
+  const model = new SessionLogModel(source)
+  expect(model.getSnapshot()).toHaveLength(4)
+  for (let index = 0; index < 4; index++) {
+    const key = `event:${index + 1}`
+    expect(model.row(key).getSnapshot()?.location).toBe('')
+    const anchor = model.chatAnchor(key)
+    if (anchor === undefined) throw new Error('Plugin display anchor missing')
+    expect(sessionLogChatTarget(anchor)).toEqual({ anchorSeq: index + 1 })
+    expect(model.pick({ anchorSeq: index + 1 })).toBe(key)
+  }
+  expect(model.pick({ turn: 7, step: 2 })).toBeUndefined()
 })
 
 it('reuses published historical rows and groups only new roots while appending deltas', () => {

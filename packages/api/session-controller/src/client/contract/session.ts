@@ -88,7 +88,8 @@ export interface ISession {
    * Send a prompt into the session. The Host can hold the prompt at its
    * admission stage, so the call can stay open; acceptance publishes the
    * prompt's echo and moves a blank Session to engaging, before the call
-   * returns when an Inbox row carrying the request id arrives first.
+   * returns when an Inbox row carrying the request id arrives first. An external
+   * receipt for the same request overrides a later RPC failure.
    * @param content - text plus browser-owned temporary image uploads.
    * @param mode - 'queue' appends a turn; 'steer' interrupts the running one.
    * @param signal - optional caller cancellation for the complete admission round-trip.
@@ -155,6 +156,7 @@ export interface ISession {
    * before a later failure; live events remain independently visible.
    * @param seq - durable event seq the window must reach (a turn's `turn/start` seq).
    * @returns completion once covered, exhausted, superseded, or failed soft.
+   * @throws a typed unsupported-operation failure for external display positions.
    */
   loadThrough(seq: SessionSeq): Promise<void>
   /**

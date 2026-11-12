@@ -78,6 +78,8 @@ Chat 在 `MarkdownDelegateProvider.getTriggerProps` 接入处适配 Markdown 目
 <a id="turn-token-usage"></a>
 ## 轮次 token 用量
 
+外部历史的显示事件不描述原生模型步骤或 token 计费，因此不会显示输入框中的活动与用量指标。原生 Session 保留这些读数。
+
 只有当已加载窗口包含 `turn/start`，且每次已启动的模型尝试都报告安全、精确的用量时，已完成轮次才显示可展开的用量行。该行会省略不可用的可选用量桶。记账不完整或相互矛盾时，整个详情都不显示，避免把部分总量冒充完整结果。
 
 设置 → 通用设置 → 性能与用量位于繁忙时的发送行为之后、Session Log 上传之前，将 `ui-chat.performanceUsage` 保存为 `detailed`（默认）或 `compact`。简洁模式仅在输入框下方显示可用的输出速度和缓存命中率，不显示统计交互卡片或每轮用量。详细模式提供会话统计和每轮 token 用量。两种模式的已完成轮次页脚均不显示耗时。该偏好仅影响展示，记账和 Session 事件保持完整。
@@ -145,6 +147,8 @@ Chat 节点 slot 为推理与工具注入绑定重置来源的 `useDisclosure` �
 
 <a id="scroll-ownership"></a>
 ## 滚动归属
+
+没有原生 Turn 边界的历史可以为 Session 级 Chat 节点声明 `navigation: { kind: 'message', position }`。唯一且有序的显示位置在分页和流式更新中保持稳定。现有导航栏据此展示已加载消息、标记阅读位置、预览文本并跳转到消息行；更早的标记随页面加载出现。这些标记不创建原生 Turn 位置或模型请求。没有消息标记时，原生 Turn 导航保持不变。
 
 Chat 等待初始历史就绪后，才允许自动内容、滚动或尺寸更新初始化阅读状态。进行中的 Session 先恢复初始显隐和位置，再允许折叠动画。
 

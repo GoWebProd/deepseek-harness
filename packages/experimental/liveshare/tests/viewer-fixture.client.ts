@@ -433,6 +433,7 @@ export interface FixtureViewerGrant {
 const FIXTURE_SESSION_READS = [
   'commands/list', 'goals/get', 'session/attachment', 'session/control', 'session/follow', 'session/list',
   'session/page', 'session/projections', 'skills/list', 'workspace/follow',
+  'sessionHistory/info',
 ] as const
 
 /** Endpoint actions the owner's share policy allows a reader on the global resource. */
@@ -4335,6 +4336,12 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         case 'settings/update': return Promise.resolve(settingsRemotes.update(args.ns as string))
         case 'settings/replace': return Promise.resolve(settingsRemotes.replace(args.ns as string))
         case 'settings/mutate': return Promise.resolve(settingsRemotes.mutate(args.ns as string))
+        case 'sessionHistory/info': {
+          const discovery = request as Pick<FixtureFollowRequest, 'address'>
+          const sessionId = discovery.address.kind === 'session' ? discovery.address.sessionId : discovery.address.childSessionId
+          const missing = requireRemoteSession({ sessionId })
+          return missing ?? sessionOk({ kind: 'native' })
+        }
         case 'session/list': return sessionApi.list(
           args._request as Parameters<FixtureSessionApi['list']>[0],
         )

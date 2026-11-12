@@ -57,6 +57,8 @@ export interface ChatNodeStore {
 /** One loaded Turn projected into the compact Chat navigation rail. */
 export interface TurnNavigationItem {
   readonly turn: number
+  /** Message positions address display rows, never native Turn operations. */
+  readonly kind?: 'message' | undefined
   /** Stable Conversation Context key the rail scrolls to. */
   readonly anchorKey: string
   /** Bounded prompt preview; empty when the loaded window starts mid-Turn. */

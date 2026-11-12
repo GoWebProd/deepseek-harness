@@ -16,6 +16,7 @@ kind: "package-reference"
 
 - [使用本包](#use-this-package)
 - [Client 引用](#client-references)
+- [外部展示历史](#external-display-history)
 - [会话媒体引用](#session-media-references)
 - [配置](#configuration)
 - [模型体验](#model-experience)
@@ -86,6 +87,19 @@ Client 的首次 `follow`、重连首屏与 `loadOlder()` 至少请求 50 条以
 `sessions.retain(target, { source, signal? })` 立即获取一个精确 Client generation 的引用，并启动其共享的首次历史打开。目标是已知 Session id 或持久的直接父子 subagent 地址；Host 在打开历史时校验显式地址。返回引用支持幂等的 `release()` 和 `Symbol.dispose`；其 `ready` Promise 跟随共享的 `Session.open()` 结果，并在该次尝试结算时解析为确切 binding，包括 Remote failure 以 `openState: 'error'` 表示的情况。仅当 `Session.open()` 拒绝、等待方取消或引用提前释放时，`ready` 才拒绝。取消一个等待方不会取消其他 owner 的打开。`sessions.using(target, options, operation)` 等待该次结算，持有引用直到回调结束，并传播被拒绝的就绪与回调失败。
 
 引用保活本地会话数据、作用域 Context 和历史流，不保活 Host Agent。普通 Session 不因保留引用而添加目录行。已保留且具有明确直接父子地址的 subagent 即使尚未收到父目录，也会保留兜底行并通知列表读取方；这些行不加入 Host 列表成员集合。Fork 标题设置直接发送 rename 并应用返回的标题投影，不 retain 子会话，也不打开其历史。最后一个引用释放时，generation 先退出可访问映射，再执行清理；后续获取可以为同一 id 创建新 generation。`binding(id)` 和 `scope(id)` 只借用已有 generation。`retainInfo(id)` 独立于目录成员关系观察稳定的只读来源计数，不执行历史 I/O。消费方来源键可通过声明合并扩展；导航和完成确认属于 UI 消费方，不属于本控制器。所有权与清理规则见 [Client 会话引用](../../../.agents/notes/implemented/architecture/2026-09-15-client-session-references.zh.md)。 模式未知的子代理地址允许读取历史，但仍校验直接父级的一致性；访问权单独按子 Session 检查。成功恢复 descriptor 后确定展示模式；失败只影响该子会话。控制请求仅携带目标 id，由 Host 检查是否支持继续执行。Client 快照仅保留子代理地址；是否能接收续接输入由运行时校验。
+
+<a id="external-display-history"></a>
+## 外部展示历史
+
+当其他引擎拥有对话，而 Harness 直接展示其历史时，使用 `ctx.sessionController.registerExternalHistoryProvider(provider)`。提供方被动地把 Harness Session 地址解析为自己的数据源；未被认领的地址保留原生历史路径。发现、分页与观察使用独立生成的 `sessionHistory` Remote 命名空间。注册表不会把返回的展示事件追加到 Session 或 SessionPersistence。引擎适配器仍负责自己的 Agent、元数据、待处理输入与持久化策略。
+
+部署来自同一 checkout 和同一次构建的完整运行时依赖闭包及基础 Web 前端，包括 UI renderer 和静态打包的 `ui-slots` 代码。不同修订使用相同包版本号并不保证 ABI 兼容。Session Controller 和 [`api-remotes`](../remotes/README.zh.md) 是集成必需的包：后者把生成的 contribution 内嵌到 Client bundle，因此仅替换 Session Controller 不会在旧 Client 组合中安装 `remote.sessionHistory`。[升级指南](../../../docs/upgrade-guide/v0.2.2-rc.2/external-session-history/guide.zh.md)列出了集成包和完整运行时更新要求。
+
+外部数据源使用不透明的分页、重连游标和明确的 generation。事件中的数字位置只决定展示顺序，不是原生日志游标。观察以替换快照开始。追加扩展窗口；补丁更新展示事实，同时保留已经加载的较早页面。权威的发送回执可以移除本地提交回显，无需虚构用户历史事件或匹配文本。数据源自己的 Conversation Definition 解释这些事实；外部展示数据不重建精确模型请求。
+
+普通 Agent 解析器尝试读取原生持久化之前，提供方先负责冷态 Agent 激活。发现和历史读取保持被动。冷态外部 state 读取可以激活其 Agent；冷态原生 state 读取仍然被动。原生元数据投影与 control 保留各自的序号空间。冷态外部投影读取返回 null，直到 Agent 提供内存中的元数据基线。原生历史、重放、等待输出、fork 和按位置导航不能使用外部展示位置，并返回明确的不支持错误。
+
+注册归调用插件的 effect 生命周期所有。移除提供方会取消并等待读取及上游迭代器释放，不会请求取消 Agent。数据源失败不会切换到原生历史；在同一次 Host 生命周期内，已经认领的身份在提供方移除后保持不可用。重启后，即使后端暂时不可用，引擎适配器也必须从持久绑定恢复所有权。三个 Remote 操作会先按目标 Harness Session 检查权限，再调用提供方。现有非 owner 角色需要明确获得新操作的授权；原生历史授权本身不授予外部历史访问权。参见[提供方类型](src/external-history.ts)、[线上词汇](src/external-history-types.ts)和[升级指南](../../../docs/upgrade-guide/v0.2.2-rc.2/external-session-history/guide.zh.md)。
 
 <a id="session-media-references"></a>
 ## 会话媒体引用

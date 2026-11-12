@@ -23,6 +23,8 @@ import {
 import { SessionCommandController, hasPromptContent } from './commands.ts'
 import { SessionControlController } from './control.ts'
 import { HistoryController } from './history/controller.ts'
+import { ExternalHistoryController } from './external-history.ts'
+import type { ExternalHistoryProvider } from './external-history.ts'
 import { StateController } from './state/controller.ts'
 import { WebController } from './web/controller.ts'
 import { SessionFileReferences } from './file-references.ts'
@@ -67,6 +69,9 @@ import type {
 } from './types.ts'
 
 export type * from './types.ts'
+export type * from './external-history-types.ts'
+export type { ExternalHistoryProvider, ExternalHistorySource } from './external-history.ts'
+export { ExternalHistoryController } from './external-history.ts'
 export { ApiSessionNotFound } from './agent.ts'
 export { SessionFileReferences } from './file-references.ts'
 export { SessionSkillCatalog } from './skill-catalog.ts'
@@ -155,6 +160,7 @@ export class SessionController extends TypertRemoteService {
   })
 
   private historyController!: HistoryController
+  private externalHistory!: ExternalHistoryController
   private stateController!: StateController
   private webController!: WebController
 
@@ -189,7 +195,11 @@ export class SessionController extends TypertRemoteService {
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
     ctx.typert.resources.register('session', { resolve: resolveSessionResource })
-    this.agents = new ApiSessionAgentController(ctx)
+    if (ctx.get('sessionHistory') === undefined) await ctx.plugin(ExternalHistoryController)
+    const externalHistory = ctx.get('sessionHistory')
+    if (externalHistory === undefined) throw new Error('External Session history service failed to start')
+    this.externalHistory = externalHistory
+    this.agents = new ApiSessionAgentController(ctx, this.externalHistory)
     this.agents.initialize()
     this.commands = new SessionCommandController(ctx, this.agents, process.cwd())
     ctx.effect(() => ctx.fileUploads.registerAgentResolver(async (sessionId) => {
@@ -205,7 +215,7 @@ export class SessionController extends TypertRemoteService {
     }, 'session-controller.promotions')
     // Assistant-stream observation must be live before the list read yields: an Agent's
     // opening frame arriving during that await would otherwise have no listener.
-    this.historyController = new HistoryController(ctx)
+    this.historyController = new HistoryController(ctx, this.externalHistory)
     this.stateController = new StateController(ctx, this.historyController)
     this.webController = new WebController(ctx, this.historyController, (observation) => { this.promote(observation) })
     this.listState = new ApiSessionList(ctx, this.listWorkSliceMs)
@@ -270,6 +280,14 @@ export class SessionController extends TypertRemoteService {
    */
   resolveAgent(sessionId: SessionId): Promise<ApiSessionAgentResult> {
     return this.agents.resolveAgent(sessionId)
+  }
+
+  /** Register an external display source in the caller plugin's lifetime.
+   * @param provider - passive external display resolver.
+   * @returns disposer cancelling and draining its reads.
+   */
+  registerExternalHistoryProvider(provider: ExternalHistoryProvider): () => Promise<void> {
+    return this.externalHistory.register(this.ctx, provider)
   }
 
   /**
@@ -447,6 +465,7 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote('fork')
   async fork(request: SessionForkRequest): Promise<SessionForkValue> {
+    await this.externalHistory.assertNative(request.sessionId, 'fork')
     if (request.allowMigration === false && this.ctx.sessions.get(request.sessionId) === undefined) {
       const stored = await this.ctx.get('sessionPersistence')?.stat(request.sessionId)
       if (stored?.formatStatus === 'migration-required' && this.ctx.sessions.get(request.sessionId) === undefined) {

@@ -54,6 +54,7 @@ export class StateController {
    * @returns the stopping reason and last complete state; no state before timeout is an error.
    */
   async wait(request: SessionWaitRequest, signal: AbortSignal): Promise<SessionWaitValue> {
+    await this.historyController.assertNative(request.sessionId, 'wait', signal)
     const timeoutMs = request.timeoutMs ?? DEFAULT_WAIT_TIMEOUT_MS
     const afterSeq = request.afterSeq ?? -1
     const maxMessages = request.maxMessages ?? DEFAULT_MAX_MESSAGES
@@ -133,7 +134,7 @@ export class StateController {
    */
   private async readState(sessionId: SessionId, signal: AbortSignal, retried = false): Promise<SessionState> {
     signal.throwIfAborted()
-    const agent = this.ctx.agents.get(sessionId)
+    const agent = this.ctx.agents.get(sessionId) ?? await this.historyController.activateExternal(sessionId, signal)
     if (agent !== undefined) {
       if (agent.session.header.cwd === undefined) rejectNotFound({ kind: 'session', sessionId })
       return {

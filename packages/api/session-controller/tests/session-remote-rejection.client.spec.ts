@@ -27,6 +27,7 @@ function rejecting(message: string): SessionRemotes {
     $stream: () => { throw new Error('unused') },
     commands: remote.commands,
     session: remote.session,
+    sessionHistory: remote.sessionHistory,
     subagents: remote.subagents,
   }
 }

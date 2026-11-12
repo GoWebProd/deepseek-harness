@@ -1,0 +1,83 @@
+{
+  "info": {
+    "kind": "external",
+    "sourceId": "fixture-provider",
+    "header": {
+      "version": 3,
+      "id": "loader-external-history",
+      "createdAt": 0,
+      "cwd": "/external-fixture",
+      "isSeeded": false
+    },
+    "capabilities": {
+      "nativeJournal": false
+    }
+  },
+  "page": {
+    "generation": "generation-1",
+    "hasMore": false,
+    "entries": [
+      {
+        "seq": 3,
+        "time": 0,
+        "type": "plugin:fixture/message",
+        "ignorable": true,
+        "data": {
+          "role": "user",
+          "text": "Backend question"
+        }
+      }
+    ]
+  },
+  "frames": [
+    {
+      "type": "replace",
+      "page": {
+        "generation": "generation-1",
+        "hasMore": true,
+        "beforeCursor": "older:opaque",
+        "resumeCursor": "resume:opaque",
+        "entries": [
+          {
+            "seq": 400,
+            "time": 1,
+            "type": "plugin:fixture/message",
+            "ignorable": true,
+            "data": {
+              "role": "assistant",
+              "text": "Backend answer"
+            }
+          },
+          {
+            "seq": 401,
+            "time": 2,
+            "type": "plugin:fixture/tool",
+            "ignorable": true,
+            "data": {
+              "id": "tool-1",
+              "status": "running"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "patch",
+      "generation": "generation-1",
+      "resumeCursor": "resume:next",
+      "entries": [
+        {
+          "seq": 401,
+          "time": 2,
+          "type": "plugin:fixture/tool",
+          "ignorable": true,
+          "data": {
+            "id": "tool-1",
+            "status": "completed",
+            "result": "Backend tool output"
+          }
+        }
+      ]
+    }
+  ]
+}

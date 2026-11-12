@@ -170,6 +170,39 @@ describe('viewer target admission through the share-viewer policy and the real G
     },
   )
 
+  it('allows history-source discovery only for visible Sessions before opening their native journal', async () => {
+    const fixture = await harness('view')
+    const history = fixture.ctx.get('sessionHistory')
+    if (history === undefined) throw new Error('the Session history controller was not mounted')
+    const discover = vi.spyOn(history, 'info')
+    for (const sessionId of [source, child]) {
+      expect(await fixture.reader.answer('share', call('sessionHistory/info', { address: { kind: 'session', sessionId } }), actor))
+        .toMatchObject({ status: 200, body: { result: { ok: true, value: { kind: 'native' } } } })
+      const id = sessionId === source ? 11 : 12
+      expect(await fixture.reader.answer('share', { op: 'stream-open', id, endpoint: 'session/follow',
+        payload: { args: { request: { address: { kind: 'session', sessionId } } } } }, actor))
+        .toMatchObject({ status: 200, body: { opened: true } })
+      expect(await fixture.reader.answer('share', { op: 'stream-next', id }, actor))
+        .toMatchObject({ status: 200, body: { values: [{ type: 'snapshot', header: { id: sessionId } }] } })
+      await fixture.reader.answer('share', { op: 'stream-cancel', id }, actor)
+    }
+    expect(discover).toHaveBeenCalledTimes(2)
+    const hidden = await fixture.reader.answer('share', call('sessionHistory/info', { address: { kind: 'session', sessionId: privateSession } }), actor)
+    expect(hidden).toMatchObject(deniedBy('sessionHistory/info', 'liveshare/read-only'))
+    expect(discover).toHaveBeenCalledTimes(2)
+    expect(JSON.stringify(hidden)).not.toContain('private-image')
+  })
+
+  it('refuses external history page and observe for a reader even on the shared Session', async () => {
+    const fixture = await harness('view')
+    const address = { kind: 'session', sessionId: source }
+    expect(await fixture.reader.answer('share', call('sessionHistory/page', { address }), actor))
+      .toMatchObject(deniedBy('sessionHistory/page', 'liveshare/read-only'))
+    expect(await fixture.reader.answer('share', { op: 'stream-open', id: 13, endpoint: 'sessionHistory/observe',
+      payload: { args: { request: { address } } } }, actor))
+      .toMatchObject({ status: 200, body: { failure: { code: 'remote-access/denied', details: { action: 'sessionHistory/observe', reason: 'liveshare/read-only' } } } })
+  })
+
   it('refuses a fork of a Session other than the shared one before anything is dispatched', async () => {
     const fixture = await harness()
     const answer = await fixture.reader.answer('share', call('session/fork', {

@@ -9,6 +9,8 @@ import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-tes
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
+import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
+import { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session/types'
 import { ActivityPill, UsagePill, deriveStats, formatDuration, type StatPillProps } from '../src/client/chat/StatsPills.tsx'
 import { formatTokens } from '../src/client/chat/token-format.ts'
 import { en, zh } from '../src/client/locale.ts'
@@ -157,8 +159,20 @@ describe('composer stats pills', () => {
   function props(
     source: { getSnapshot(): ChatSnapshot; subscribe(fn: () => void): () => void },
     values: Record<string, unknown> = { tokenUsage: USAGE },
+    historySource?: SessionSnapshot['historySource'],
   ): StatPillProps {
-    return { usePerformanceUsage: selector => selector('detailed'), useChat: bindSnapshotSelector(source), useProjection: projections(values), t: tEn }
+    const snapshot: SessionSnapshot = {
+      sessionId: SessionId('stats-session'), pendingSubmissions: [], running: false, subagent: null,
+      removed: false, openState: 'open', openError: null, hasMore: false, loadingOlder: false,
+      historyWasPartial: false, historyLoadStatus: 'idle',
+      promptError: null, blank: false, lastAgentError: null, promptAttempted: true, awaitingFirstTurn: false,
+      ...(historySource === undefined ? {} : { historySource }),
+    }
+    return {
+      usePerformanceUsage: selector => selector('detailed'), useChat: bindSnapshotSelector(source),
+      useProjection: projections(values), t: tEn,
+      useSession: bindSnapshotSelector({ getSnapshot: () => snapshot, subscribe: () => () => {} }),
+    }
   }
 
   function tokenUsage(cacheReadTokens: number, uncachedInputTokens: number) {
@@ -169,6 +183,23 @@ describe('composer stats pills', () => {
   const timedStep = (): AssistantMessageNode => ({
     ...assistant(1, 1, { outputTokens: 60 }),
     timing: { stepStartTime: 1_000, firstTokenTime: 1_800, completedTime: 4_800 },
+  })
+
+  it.each(['compact', 'detailed'] as const)('omits native statistics for external history in %s mode despite cached projections', (mode) => {
+    const { source } = makeSource({ nodes: [timedStep()] })
+    const values = { tokenUsage: USAGE, sessionStats: sessionStats({ turns: 7, steps: 44, decodeMs: 1_000, decodeTokens: 20 }) }
+    const external = {
+      kind: 'external', sourceId: 'test-external', capabilities: { nativeJournal: false },
+      header: { version: SESSION_FORMAT_VERSION, id: SessionId('stats-session'), createdAt: 0, isSeeded: false },
+    } as const
+    const view = render(<StatsPills {...props(source, values, external)} usePerformanceUsage={selector => selector(mode)} />)
+    expect(view.container.textContent).toBe('')
+    expect(view.queryByRole('button')).toBeNull()
+    view.rerender(<StatsPills {...props(source, values)} usePerformanceUsage={selector => selector(mode)} />)
+    expect(view.container.querySelectorAll('[data-composer-stat]')).toHaveLength(2)
+    if (mode === 'detailed') expect(view.getByRole('button', { name: '7 turns 44 steps · 20 tok/s' })).toBeTruthy()
+    view.rerender(<StatsPills {...props(source, {}, external)} usePerformanceUsage={selector => selector(mode)} />)
+    expect(view.container.textContent).toBe('')
   })
 
   it('compact keeps only speed and cache hit, with no interactive statistics', () => {

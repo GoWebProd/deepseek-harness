@@ -885,6 +885,12 @@ Host service backing the generated `ctx.remote.session` namespace.
  */
 resolveAgent(sessionId: SessionId): Promise<ApiSessionAgentResult>
 
+/** Register an external display source in the caller plugin's lifetime.
+ * @param provider - passive external display resolver.
+ * @returns disposer cancelling and draining its reads.
+ */
+registerExternalHistoryProvider(provider: ExternalHistoryProvider): () => Promise<void>
+
 /**
  * Read all visible Session rows without resuming an Agent.
  * @param _request - reserved empty list request.
@@ -1080,6 +1086,60 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
 Types: [SessionId](core.md) · [SessionSearchRequest](session-query.md)
 
 Source: [`packages/api/session-controller/src/index.ts`](../../packages/api/session-controller/src/index.ts)
+
+<a id="ctxsessionhistory--externalhistorycontroller"></a>
+
+### `ctx.sessionHistory` — `ExternalHistoryController`
+
+Registry ownership covers provider calls and upstream iterators, never Agent execution.
+
+```ts cordis-catalog
+/** Scope provider reads and subscriptions to their registering plugin.
+ * @param owner - registering plugin context.
+ * @param provider - passive resolver.
+ * @returns awaited provider teardown.
+ */
+register(owner: Context, provider: ExternalHistoryProvider): () => Promise<void>
+
+/** Discover display ownership without reading history or activating an Agent.
+ * @param request - authorized identity.
+ * @param signal - discovery cancellation.
+ * @returns the selected display family.
+ */
+@Remote({ resources: { session: request => addressId(request.address) } }) async info(request: ExternalHistoryInfoRequest, signal: AbortSignal): Promise<ExternalHistoryInfo>
+
+/** Read one provider-owned display window.
+ * @param request - authorized page window.
+ * @param signal - read cancellation.
+ * @returns provider-owned display data.
+ */
+@Remote({ resources: { session: request => addressId(request.address) } }) async page(request: ExternalHistoryPageRequest, signal: AbortSignal): Promise<ExternalHistoryPage>
+
+/** Observe a provider without acquiring or stopping its Agent.
+ * @param request - authorized reconnect position.
+ * @param signal - observation lifetime.
+ * @returns snapshot-first display frames.
+ */
+@Remote({ mode: 'stream', resources: { session: request => addressId(request.address) } }) async *observe(request: ExternalHistoryObserveRequest, signal: AbortSignal): AsyncIterable<ExternalHistoryFrame>
+
+/** Deduplicate concurrent external activation without a native persistence read.
+ * @param sessionId - ordinary Session identity.
+ * @param signal - cancellation of this caller's wait.
+ * @returns an external Agent or native delegation.
+ */
+async activate(sessionId: SessionId, signal: AbortSignal = this.lifetime.signal): Promise<Agent | undefined>
+
+/** Reject use of display positions in a native journal operation.
+ * @param sessionId - native operation target.
+ * @param operation - operation name.
+ * @param signal - lookup cancellation.
+ */
+async assertNative(sessionId: SessionId, operation: string, signal: AbortSignal = this.lifetime.signal): Promise<void>
+```
+
+Types: [Agent](core.md) · [SessionId](core.md)
+
+Source: [`packages/api/session-controller/src/external-history.ts`](../../packages/api/session-controller/src/external-history.ts)
 
 <a id="ctxsessionlogdeepseek--sessionlogdeepseekservice"></a>
 

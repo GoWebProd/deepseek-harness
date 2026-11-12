@@ -13,6 +13,7 @@ import type { TurnNavigationItem } from '../contract/snapshot.ts'
 /** One rail mark: a loaded Turn scrolls to its row; an unloaded one pages history through its seq first. */
 export interface TurnRailItem {
   readonly turn: number
+  readonly kind?: 'message' | undefined
   /** Bounded prompt preview (loaded window first, outline fallback). */
   readonly prompt: string
   /** Bounded response preview (loaded window first, outline fallback). */
@@ -79,6 +80,7 @@ export function mergeTurnRailItems(
     const preview = byTurn.get(item.turn)
     byTurn.set(item.turn, {
       turn: item.turn,
+      ...(item.kind === undefined ? {} : { kind: item.kind }),
       prompt: item.prompt !== '' ? item.prompt : preview?.prompt ?? '',
       response: item.response !== '' ? item.response : preview?.response ?? '',
       anchor: { kind: 'loaded', key: item.anchorKey },

@@ -1,10 +1,15 @@
 import type { Context } from '@deepseek-ai/cordis'
+import type { IgnorablePluginRecordEvent, SessionEventLike } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
   ConversationMatch, ConversationNodeContext, ConversationNodeDefinition, RequestPromptInspector,
   SystemPromptState, SystemPromptInspector,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ChatNode } from '../contract/chat-nodes.ts'
 import { chatNode } from './common.ts'
+
+function isIgnorablePluginRecordEvent(event: SessionEventLike): event is IgnorablePluginRecordEvent {
+  return event.type.startsWith('plugin:') && 'ignorable' in event && event.ignorable
+}
 
 declare module '../contract/chat-nodes.ts' {
   interface ChatNodeDataMap {
@@ -65,12 +70,12 @@ export function systemMessageDefinition(inspect: SystemPromptInspector): Convers
   return {
     kind: 'system-message',
     target: 'chat',
-    match: event => event.type === 'system/message'
-      || ('surfaceOp' in event && event.surfaceOp !== 'append')
+    match: event => !isIgnorablePluginRecordEvent(event) && (event.type === 'system/message'
+      || ('surfaceOp' in event && event.surfaceOp !== 'append'))
       ? { id: String(event.seq), role: 'start' }
       : null,
     start: (_context, match, reader) => {
-      if (match.event.type === 'assistant/live-chunk') throw new Error('system-message requires a durable event')
+      if (match.event.type === 'assistant/live-chunk' || isIgnorablePluginRecordEvent(match.event)) throw new Error('system-message requires a durable event')
       return inspect(reader.previous<SystemPromptState>('system-message')?.state, match.event)
     },
     update: context => context.state,

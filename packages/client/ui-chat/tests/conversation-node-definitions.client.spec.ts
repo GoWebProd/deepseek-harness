@@ -3,7 +3,7 @@ import type {
   ChatConversationViewNode, ChatSnapshot,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {
-  SessionEventLikeEntry, SessionLiveEventEntry,
+  IgnorablePluginRecordEvent, SessionEventLikeEntry, SessionLiveEventEntry,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import {
   ConversationNodeAssembler,
@@ -11,6 +11,7 @@ import {
   type ConversationViewDefinition,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
+import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import { inspectSystemPrompt } from '../../ui-conversation/src/client/contract/system-prompt.ts'
 import { AssistantStreamAccumulator } from '@deepseek-ai/dsh-llm/assistant-stream'
 import { LlmAttemptId, ToolCallId } from '@deepseek-ai/dsh-llm/brand'
@@ -138,8 +139,8 @@ function packedInputs(entries: readonly SessionLiveEventEntry[]): SessionEventLi
       output.push({
         ...entry,
         event: {
-          ...entry.event,
-          data: { ...entry.event.data, stream: current.stream.snapshot() },
+          ...event,
+          data: { ...event.data, stream: current.stream.snapshot() },
         } as SessionEvent,
       })
       active = undefined
@@ -307,6 +308,18 @@ describe('built-in conversation node Definitions', () => {
 
     expect(systemMessageDefinition(inspectSystemPrompt).match(invalidStart.event)).toBeNull()
     expect(systemMessageDefinition(inspectSystemPrompt).update({ state } as never, invalidStart)).toBe(state)
+  })
+
+  it('leaves informational plugin display records to their owning Definitions', () => {
+    const event: IgnorablePluginRecordEvent = {
+      type: 'plugin:fixture/display-delta', seq: SessionSeq(1), time: 1, ignorable: true,
+      data: null, surfaceOp: { opaque: true }, sourceEventSeqs: ['opaque'],
+    }
+    expect(unknownFallbackDefinition.match(event)).toBeNull()
+    expect(systemMessageDefinition(inspectSystemPrompt).match(event)).toBeNull()
+    expect(() => systemMessageDefinition(inspectSystemPrompt).start({} as never, { event, role: 'start', location: { kind: 'session' } }, {} as never))
+      .toThrow('system-message requires a durable event')
+    expect(snapshot(assembler([{ type: 'event', event }])).order).toEqual([])
   })
 
   it('keeps ordinary command-only history inactive for the Conversation shell', () => {

@@ -1532,6 +1532,7 @@ describe('connected generation', () => {
   })
 
   it('refreshes query baselines without rebuilding independently resumed Session sources', async ({ mock, remote, start }) => {
+    mock.load({ unary: { 'sessionHistory/info': ok({ kind: 'native' }) } })
     mock.stream(FOLLOW, followScript(ok({
       cursor: 5,
       records: entries(plainTurn(SessionSeq(0), 0, 'a', 'b')) as never[],
