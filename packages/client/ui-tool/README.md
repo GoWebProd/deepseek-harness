@@ -37,6 +37,10 @@ File and URL toolview Slots obtain `useContextMenu` directly and supply bound `f
 
 ### Registering a business tool view
 
+History providers may supply the optional Session standard prop `createToolMaterial(source, callId)`. It receives the root Chat node's display data (`undefined` for nested calls) and prepares one inert `ToolMaterialHandle` per view. Unrelated calls return `undefined` and retain their standard presentation. Preparation acquires no resources; snapshots retain identity until changed.
+
+Chat's [disclosure binding](../ui-chat/README.md#grouped-rendering) owns committed activation, snapshot subscriptions, expansion observation, and disposal. Handles support reactivation after Strict Mode cleanup. Providers load full read-only arguments/results only while expanded, cancel unfinished reads on collapse or disposal, and publish a replacement `block` plus localized loading/retry labels. Loading, failure, and Retry stay inside the existing call entry; retry repeats the read, never the tool. Changing between source-backed and ordinary rendering remounts the atomic card to separate Hook lifetimes. This API creates no Tool execution, Session event, or model request.
+
 An owning business package registers its wire Tool name into `tool.call.toolview`:
 
 ```text
