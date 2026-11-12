@@ -67,7 +67,7 @@ function exchangeFixture() {
   const nodes: ChatNode[] = [
     { ...base, key: 'input', id: 'input', kind: 'user', anchorSeq: 1, groupTree: 'exchange',
       data: { kind: 'user', seq: 1, time: 1_000, content: [{ type: 'text', text: 'Read full Tool output' }], source: null } },
-    { ...base, key: 'tool', id: 'tool', kind: 'tool-call', anchorSeq: 2, data: { root, source } },
+    { ...base, key: 'tool', id: 'tool', kind: 'tool-call', anchorSeq: 2, data: { root } },
     { ...base, key: 'answer', id: 'answer', kind: 'assistant-step', anchorSeq: 3,
       displayWork: { source: 'integration-exchange', tailStatus: 'idle' },
       data: { status: 'settled', turn: 0, step: 0, blocks, time: 3_000, source,
