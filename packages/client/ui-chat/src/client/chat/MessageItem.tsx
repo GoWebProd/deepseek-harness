@@ -330,10 +330,11 @@ export function PendingSubmissionBubble({ submission, loadImage, renderFactorySl
  * bubble without asking for it.
  */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, renderFactorySlot, loadImage, renderSlotChain, t,
+  node, renderFactorySlot, loadImage, renderSlotChain, renderSlot, t,
 }: ChatNodeViewProps<'user' | 'steering'> & {
   /** Bound by the `user` keyed registration, the only entry that declares the seat. */
   renderSlotChain: PropsRenderSlots<'conversation.chat.user.before'>['renderSlotChain']
+  renderSlot: PropsRenderSlots<'conversation.chat.user.actions'>['renderSlot']
 }) {
   const data = node.data
   return (
@@ -354,6 +355,9 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
           clock="start"
           className={css.actions}
           t={t}
+          extraActions={node.kind === 'user'
+            ? renderSlot('conversation.chat.user.actions', { messageId: data.messageId, source: data.source, text })
+            : null}
         />
       )}
     />
