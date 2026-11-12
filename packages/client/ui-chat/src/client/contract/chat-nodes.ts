@@ -42,6 +42,8 @@ export interface AssistantChatData {
   readonly blocks: readonly AssistantBlock[]
   readonly time: number
   readonly usage?: unknown
+  /** Optional display-owner metadata passed to finalized-message actions. */
+  readonly source?: unknown
   readonly finalNode?: AssistantMessageNode
 }
 

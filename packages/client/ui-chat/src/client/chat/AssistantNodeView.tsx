@@ -2,6 +2,9 @@ import { memo, useCallback, useMemo } from 'react'
 import type { InjectFace, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChatFileMentions, ChatNodeViewProps, PresentationInjected, TurnTailOwnerProps } from '../contract/slots.ts'
 import { AssistantMarkdown } from './AssistantMarkdown.tsx'
+import { MessageIconActions } from './MessageIconActions.tsx'
+import { assistantText } from './turn-assistant.ts'
+import css from './TurnTailNodeView.module.css'
 
 /** Business readers owned by the assistant renderer's existing Slot registration. */
 export interface AssistantNodeInjected extends PresentationInjected {
@@ -12,7 +15,7 @@ export interface AssistantNodeInjected extends PresentationInjected {
 }
 
 type AssistantNodeViewProps = ChatNodeViewProps<'assistant-step'> & InjectFace<AssistantNodeInjected>
-  & PropsRenderSlots<'conversation.chat.reasoning.body' | 'conversation.chat.message.images'>
+  & PropsRenderSlots<'conversation.chat.reasoning.body' | 'conversation.chat.message.images' | 'conversation.chat.assistant.actions'>
 
 /** Streaming, settled, and interrupted Assistant states share one keyed renderer instance. */
 export const AssistantNodeView = memo(function AssistantNodeView({
@@ -46,22 +49,32 @@ export const AssistantNodeView = memo(function AssistantNodeView({
       : turnProcess.spec.answerStep === data.step && turnProcess.spec.inlineReasoning)
     && !turnProcess.open
   const revealProcess = useCallback(() => { turnProcess?.setOpen(true) }, [turnProcess])
+  const messageId = data.finalNode?.messageId
+  const standaloneActions = node.location.kind === 'session' && data.status === 'settled'
+    && messageId !== undefined && groupPart !== 'reasoning'
+    && data.blocks.some(block => block.kind === 'text' && block.text.trim() !== '')
   return (
-    <AssistantMarkdown
-      blocks={data.blocks}
-      groupPart={groupPart}
-      useDisclosure={useDisclosure}
-      streaming={data.status === 'running'}
-      textInteractionSource={data.status === 'settled' && data.finalNode?.messageId !== undefined}
-      interrupted={data.status === 'interrupted'}
-      loadImage={loadImage}
-      reasoningHidden={reasoningHidden}
-      useGroupAction={useGroupAction}
-      usePresentation={usePresentation}
-      renderSlot={renderSlot}
-      revealProcess={revealProcess}
-      mentions={mentions}
-      t={t}
-    />
+    <>
+      <AssistantMarkdown
+        blocks={data.blocks}
+        groupPart={groupPart}
+        useDisclosure={useDisclosure}
+        streaming={data.status === 'running'}
+        textInteractionSource={data.status === 'settled' && data.finalNode?.messageId !== undefined}
+        interrupted={data.status === 'interrupted'}
+        loadImage={loadImage}
+        reasoningHidden={reasoningHidden}
+        useGroupAction={useGroupAction}
+        usePresentation={usePresentation}
+        renderSlot={renderSlot}
+        revealProcess={revealProcess}
+        mentions={mentions}
+        t={t}
+      />
+      {standaloneActions && <MessageIconActions
+        text={assistantText(data.blocks)} time={data.time} clock="end" className={css.actions} t={t}
+        extraActions={renderSlot('conversation.chat.assistant.actions', { messageId, source: data.source })}
+      />}
+    </>
   )
 })
