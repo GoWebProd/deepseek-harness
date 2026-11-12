@@ -45,6 +45,7 @@ export type {
   UserBeforeOwnerProps, UserActionOwnerProps,
   TurnProcessOwnerProps, TurnTailOwnerProps, UseChat, UseChatNodeTurnData, UseDisclosure, UsePresentation, UseGroupAction,
 } from './contract/slots.ts'
+export type { DisclosureBinding, DisclosureObserver, DisclosureState } from './contract/slots.ts'
 export type {
   TurnProcessSpec,
 } from './contract/turn-process.ts'

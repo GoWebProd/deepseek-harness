@@ -4,7 +4,7 @@ import { toolSessionEvents } from './tool-fixtures.client.ts'
 // @vitest-environment jsdom
 /** Tool assembly acceptance through the real ui-conversation host. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { ISession } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -18,6 +18,7 @@ import { SlotTestRuntime, usePinnedBrowserLanguages, stubConfigForm } from '@dee
 import { apply as applyConversation, inject as injectConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 import { apply as applyTool, inject as injectTool } from '../src/client/apply.ts'
+import type { ToolMaterialSnapshot, ToolMaterialHandle } from '../src/client/contract/slots.ts'
 
 // The service reads its initial locale from the browser; these specs assert
 // the shipped Chinese copy, so they state the browser they assume.
@@ -156,6 +157,42 @@ describe('todo_write assembly (product registrations, no outlet twins)', () => {
 })
 
 describe('terminal card assembly', () => {
+  it('loads source-owned material inside one native call and retires it with the provider', async () => {
+    const original = bashResult(3, 'lazy', { content: [{ type: 'text', text: 'preview output' }] })
+    const runtime = await bench([original, bashResult(4, 'ordinary')])
+    const labels = { loadingLabel: '加载中…', retryLabel: '重试' }
+    const state = createSnapshotStore<ToolMaterialSnapshot>({ ...labels, expanded: false, loading: false, error: '' })
+    const full = { ...original, content: [{ type: 'text' as const, text: 'complete source output' }] }
+    const dispose = vi.fn()
+    const setExpanded = vi.fn((expanded: boolean) => { state.set({ ...labels, expanded, loading: expanded, error: '' }) })
+    const material: ToolMaterialHandle = {
+      getSnapshot: () => state.getSnapshot(), subscribe: listener => state.subscribe(listener),
+      activate: vi.fn(), dispose, setExpanded,
+      retry: vi.fn(function (this: ToolMaterialHandle) { expect(this).toBe(material) }),
+    }
+    const remove = runtime.ctx.uiSession.provide({ props: ['createToolMaterial'], resolve: () => ({ props: {
+      createToolMaterial: (_source: unknown, callId: string) => callId === 'lazy' ? material : undefined,
+    } }) })
+    const view = runtime.renderRoot()
+    expect(setExpanded).toHaveBeenCalledWith(false)
+    expect(view.queryByText('complete source output')).toBeNull()
+    const row = view.container.querySelector('[data-chat-call-id="lazy"]')!
+    fireEvent.click(row.querySelector('[data-expandable]')!)
+    await waitFor(() => { expect(row.querySelector('[role="status"]')).not.toBeNull() })
+    act(() => { state.set({ ...labels, expanded: true, loading: false, error: 'Source read failed' }) })
+    expect(row.querySelector('[role="alert"]')?.textContent).toBe('Source read failed')
+    fireEvent.click(within(row as HTMLElement).getByRole('button', { name: '重试' }))
+    expect(material.retry).toHaveBeenCalledOnce()
+    act(() => { state.set({ ...labels, expanded: true, loading: false, error: '', block: full }) })
+    await waitFor(() => { expect(row.textContent).toContain('complete source output') })
+    expect(view.container.querySelectorAll('[data-chat-call-id="lazy"]')).toHaveLength(1)
+    expect(view.container.querySelectorAll('[data-chat-call-id="ordinary"]')).toHaveLength(1)
+    remove()
+    await waitFor(() => { expect(dispose).toHaveBeenCalled() })
+    expect(view.container.querySelector('[data-chat-call-id="lazy"]')!.textContent).not.toContain('complete source output')
+    await runtime.dispose()
+  })
+
   it('both the keyed bash row and the fallback row reach the terminal card through the whole-row expand', async () => {
     const runtime = await bench([
       bashResult(3, 'c-keyed'),

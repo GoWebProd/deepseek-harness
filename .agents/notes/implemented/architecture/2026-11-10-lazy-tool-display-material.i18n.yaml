@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-10-lazy-tool-display-material.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-10-lazy-tool-display-material.md
+/agent-note-lazy-tool-display-material:
+  en: cb79790c0f0cf509
+  zh: 9902b89781918425
+/agent-note-lazy-tool-display-material/problem:
+  en: 51a0a20d428ad3b3
+  zh: 3c484dfec4f4f7a5
+/agent-note-lazy-tool-display-material/decision:
+  en: a7a5a0dfa31d5bad
+  zh: 18d82e04efd4731b
+/agent-note-lazy-tool-display-material/alternatives-considered:
+  en: 8ef10e80973b9440
+  zh: 04c0f3c880227c0a
+/agent-note-lazy-tool-display-material/consequences:
+  en: 9236a5f35309aace
+  zh: 18a1e2de129896f5
