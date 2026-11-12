@@ -4,7 +4,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type {
-  OpenFileOptions, PreparingToolCall, StartedToolCall,
+  DisclosureObserver, OpenFileOptions, PreparingToolCall, StartedToolCall,
   ToolResultNode, UseDisclosure,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { MessageImageLoader, MessageImageSource } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -15,10 +15,9 @@ import type { ToolFileInjected } from '../tool/file-menu.ts'
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /**
-     * Keyed Tool view dispatched by wire name, including custom tools.
-     * Register with `key: '<tool name>'`; a typo never renders.
-     * Occupied keys replace the view; unclaimed keys use the generic row. Owner
-     * phase data includes `name` and lazy `args`; preparing arguments may be incomplete.
+     * Keyed Tool views use wire names; register `key: '<tool name>'`, including custom names.
+     * A typo never renders. Occupied keys replace views; unclaimed keys use generic rows.
+     * Each phase includes `name` and lazy `args`; preparing arguments may be incomplete.
      */
     'tool.call.toolview': {
       kind: 'keyed'
@@ -40,6 +39,28 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'tool.call.images': { kind: 'single'; scope: 'session'; owner: ToolImagesOwnerProps }
   }
+
+  interface SessionStandardProps {
+    /** Prepare an inert source per view; return undefined for unrelated calls. */
+    createToolMaterial?: ((source: unknown, callId: string) => ToolMaterialHandle | undefined) | undefined
+  }
+}
+
+/** Read-only display material for one call; no executor or Session mutations. */
+export interface ToolMaterialSnapshot {
+  readonly block?: PreparingToolCall | StartedToolCall | ToolResultNode
+  readonly expanded: boolean
+  readonly loading: boolean
+  readonly error: string
+  /** Localized loading and retry copy owned by the material provider. */
+  readonly loadingLabel: string
+  readonly retryLabel: string
+}
+
+/** An inert view source; activation reacquires resources after Strict Mode cleanup. */
+export interface ToolMaterialHandle extends DisclosureObserver<ToolMaterialSnapshot> {
+  /** Retry the provider's failed read without executing the tool again. */
+  retry: () => void
 }
 
 /** Owner currency of the Tool image gallery slot: references plus the loader. */
