@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-12-display-work-folding.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-12-display-work-folding.md
+/agent-note-display-only-work-folding:
+  en: 0d951ff8dd9178a7
+  zh: 5050198ef859ccbf
+/agent-note-display-only-work-folding/problem:
+  en: abd1b8f6f0080f94
+  zh: 4a6f9fe0865e73a4
+/agent-note-display-only-work-folding/decision:
+  en: 41b148a962998729
+  zh: 2f345e892bed6c70
+/agent-note-display-only-work-folding/alternatives-considered:
+  en: dfcd5a815348901c
+  zh: 751a2fb94739e918
+/agent-note-display-only-work-folding/consequences:
+  en: 66f5656ecd83205c
+  zh: b9dcb6b102987355

@@ -51,6 +51,7 @@ import {
 } from '../src/client/chat/MessageItem.tsx'
 import { TurnTailNodeView } from '../src/client/chat/TurnTailNodeView.tsx'
 import { TurnProcessNodeView } from '../src/client/chat/TurnProcessNodeView.tsx'
+import { DisplayProcessNodeView } from '../src/client/chat/DisplayProcessNodeView.tsx'
 import { SystemPromptNodeView } from '../src/client/chat/SystemPromptRow.tsx'
 import { formatRunDuration as durationParts } from '../src/client/chat/message-chrome.ts'
 import { ChatSnapshotBuilder } from '../src/client/conversation-nodes/chat-snapshot-builder.ts'
@@ -356,6 +357,8 @@ function HarnessChatNode({
       return <TurnMaxTokensNodeView {...nodeProps} node={owner.node} />
     case 'turn-process':
       return <TurnProcessNodeView {...nodeProps} node={owner.node} />
+    case 'display-process':
+      return <DisplayProcessNodeView {...nodeProps} node={owner.node} />
     case 'system-prompt':
       return <SystemPromptNodeView {...nodeProps} node={owner.node} />
     case 'turn-tail':
@@ -4915,4 +4918,118 @@ it('does not infer menu targets from links or data attributes inside a plugin fl
   fireEvent.contextMenu(view.getByRole('button', { name: 'Custom target' }))
   expect(custom).toHaveBeenCalledOnce()
   expect(h.props.resolveFilePath).not.toHaveBeenCalled()
+})
+
+function displayWorkFixture(status: 'idle' | 'running' | 'failed' | 'cancelled' | 'unknown' = 'idle'): ChatNode[] {
+  const base = { target: 'chat' as const, location: { kind: 'session' as const }, visibility: 'visible' as const, displayWork: { source: 'external-chat' } }
+  return [
+    { ...base, key: 'display:user', id: 'user', kind: 'user', anchorSeq: 0, groupTree: 'exchange', data: user(0, 'External question') },
+    { ...base, key: 'display:tool', id: 'tool', kind: 'tool-call', anchorSeq: 1, data: { root: toolResult(1, 'external-call') } },
+    { ...base, key: 'display:progress', id: 'progress', kind: 'assistant-step', anchorSeq: 2,
+      data: { status: 'settled', turn: 0, step: 0, blocks: [{ kind: 'text', text: 'External progress' }], time: 2, finalNode: assistant(2, 'External progress', 0, 0) } },
+    { ...base, key: 'display:answer', id: 'answer', kind: 'assistant-step', anchorSeq: 3,
+      displayWork: { source: 'external-chat', tailStatus: status },
+      data: { status: status === 'running' ? 'running' : 'settled', turn: 0, step: 0,
+        blocks: [{ kind: 'reasoning', text: 'External reasoning' }, { kind: 'text', text: 'External answer' }], time: 3,
+        ...status === 'running' ? {} : { finalNode: assistant(3, 'External answer', 0, 0) } } },
+  ]
+}
+
+const displayTimeline = { turnOrder: [], turns: new Map<number, TurnLocation>() }
+
+function displayFlow(view: HTMLElement, key: string): HTMLElement {
+  return view.querySelector<HTMLElement>(`[data-chat-node-key="display:${key}"]`)!
+}
+
+describe('external display work disclosure', () => {
+  it.each((['compact', 'standard', 'detailed'] as const).flatMap(mode =>
+    (['completion', 'next-input'] as const).flatMap(timing => (['all', 'final'] as const).map(replies => ({ mode, timing, replies }))),
+  ))('uses $mode, $timing and $replies without Engine Turns', ({ mode, timing, replies }) => {
+    const builder = new ChatSnapshotBuilder()
+    const raw = displayWorkFixture()
+    const snapshot = builder.replace({ nodes: raw, timeline: displayTimeline })
+    const h = makeHarness({}, {}, snapshot)
+    h.setTranscriptView(mode); h.setCollapseTiming(timing); h.setFoldedReplies(replies)
+    const view = render(<h.ChatView {...h.props} />)
+    const hidden = (key: string) => displayFlow(view.container, key).getAttribute('hidden')
+    expect(hidden('user')).toBeNull()
+    expect(hidden('answer')).toBeNull()
+    expect(hidden('tool')).toBe(timing === 'completion' ? 'until-found' : null)
+    expect(hidden('progress')).toBe(timing === 'completion' && replies === 'final' ? 'until-found' : null)
+    const control = view.container.querySelector<HTMLButtonElement>('[data-display-process]')!
+    expect(control.getAttribute('aria-expanded')).toBe(timing === 'completion' ? 'false' : 'true')
+    expect(snapshot.timeline.turns.size).toBe(0)
+    expect(raw.every(node => node.location.kind === 'session')).toBe(true)
+    if (timing === 'next-input') {
+      const next: ChatNode<'user'> = { ...raw[0] as ChatNode<'user'>, key: 'display:next', id: 'next', anchorSeq: 10, data: user(10, 'Next question') }
+      act(() => {
+        h.set({ chat: builder.replace({ nodes: [...raw, next], timeline: displayTimeline }) })
+        builder.publish()
+      })
+      expect(hidden('tool')).toBe('until-found')
+      expect(hidden('progress')).toBe(replies === 'final' ? 'until-found' : null)
+    }
+    fireEvent.click(control)
+    expect(hidden('tool')).toBeNull()
+    expect(hidden('progress')).toBeNull()
+    fireEvent.click(control)
+    expect(hidden('tool')).toBe('until-found')
+  })
+
+  it.each(['running', 'failed', 'cancelled', 'unknown'] as const)('keeps %s work and answers visible', (status) => {
+    const snapshot = new ChatSnapshotBuilder().replace({ nodes: displayWorkFixture(status), timeline: displayTimeline })
+    const h = makeHarness({}, {}, snapshot)
+    h.setFoldedReplies('final')
+    const view = render(<h.ChatView {...h.props} />)
+    expect(displayFlow(view.container, 'tool').getAttribute('hidden')).toBeNull()
+    expect(displayFlow(view.container, 'progress').getAttribute('hidden')).toBeNull()
+    expect(displayFlow(view.container, 'answer').getAttribute('hidden')).toBeNull()
+    expect(view.container.querySelector('[data-display-process]')).toBeNull()
+  })
+
+  it('keeps verbose rows flat and preserves source node identities', () => {
+    const snapshot = new ChatSnapshotBuilder().replace({ nodes: displayWorkFixture(), timeline: displayTimeline })
+    const h = makeHarness({}, {}, snapshot)
+    h.setTranscriptView('verbose'); h.setFoldedReplies('final')
+    const view = render(<h.ChatView {...h.props} />)
+    expect(displayFlow(view.container, 'tool').getAttribute('hidden')).toBeNull()
+    expect(displayFlow(view.container, 'progress').getAttribute('hidden')).toBeNull()
+    expect(displayFlow(view.container, 'answer').getAttribute('hidden')).toBeNull()
+    const keys = [...view.container.querySelectorAll('[data-chat-node-key]')].map(row => row.getAttribute('data-chat-node-key'))
+    expect(keys).toEqual(expect.arrayContaining(['display:user', 'display:tool', 'display:progress', 'display:answer']))
+    expect(snapshot.timeline.turns.size).toBe(0)
+  })
+
+  it('records display folding independently of engine locations', () => {
+    const snapshot = new ChatSnapshotBuilder().replace({ nodes: displayWorkFixture(), timeline: displayTimeline })
+    const h = makeHarness({}, {}, snapshot)
+    h.setFoldedReplies('final')
+    const view = render(<h.ChatView {...h.props} />)
+    expect([...view.container.querySelectorAll<HTMLElement>('[data-chat-flow-kind]')].map(row => ({
+      kind: row.dataset.chatFlowKind, hidden: row.hasAttribute('hidden'),
+    }))).toMatchInlineSnapshot(`
+      [
+        {
+          "hidden": false,
+          "kind": "user",
+        },
+        {
+          "hidden": false,
+          "kind": "display-process",
+        },
+        {
+          "hidden": true,
+          "kind": "tool-call",
+        },
+        {
+          "hidden": true,
+          "kind": "assistant-step",
+        },
+        {
+          "hidden": false,
+          "kind": "assistant-step",
+        },
+      ]
+    `)
+  })
 })

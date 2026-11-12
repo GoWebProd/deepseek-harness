@@ -17,6 +17,7 @@ import { sessionRecallLabels, skillInvocationName } from './event-projection.ts'
 import { GroupTreeSegments } from './group-tree-segments.ts'
 import { sameTurnNavigationItem, turnNavigationItem } from './turn-navigation.ts'
 import { ChatTurnProcessProjector } from './turn-process-presentation.ts'
+import { DisplayProcessProjector } from './display-process.ts'
 
 const EMPTY_KEYS: readonly string[] = []
 const EMPTY_TURNS: readonly number[] = []
@@ -1080,6 +1081,7 @@ function partialContributionChanged(
 
 /** Incremental keyed Chat builder registered under the `chat` target. */
 export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversationViewNode, ChatSnapshot> {
+  private readonly displayProcesses = new DisplayProcessProjector()
   private readonly store = new MutableChatNodeStore()
   private readonly locations = new MutableChatLocationIndex()
   private readonly navigation = new MutableTurnNavigationIndex()
@@ -1111,7 +1113,7 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
     readonly nodes: readonly ChatConversationViewNode[]
     readonly timeline: ConversationTimelineSnapshot
   }): ChatSnapshot {
-    const nodes = this.skillNames.replace(this.referenceLabels.replace(input.nodes))
+    const nodes = this.skillNames.replace(this.referenceLabels.replace(this.displayProcesses.replace(input.nodes)))
     this.store.replace(nodes)
     this.order = orderedVisibleChatNodes(nodes).map(node => node.key)
     this.locations.rebuild(this.order, this.store)
@@ -1136,7 +1138,7 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
     readonly timeline: ConversationTimelineSnapshot
     readonly changedTurns?: readonly number[]
   }): ChatSnapshot {
-    const upserts = this.skillNames.apply(this.referenceLabels.apply(input.upserts, this.store), this.store)
+    const upserts = this.skillNames.apply(this.referenceLabels.apply(this.displayProcesses.apply(input.upserts), this.store), this.store)
     const processTurns = new Set<number>()
     let structural = false
     const contentOnly: ChatConversationViewNode[] = []

@@ -16,7 +16,7 @@ type AssistantNodeViewProps = ChatNodeViewProps<'assistant-step'> & InjectFace<A
 
 /** Streaming, settled, and interrupted Assistant states share one keyed renderer instance. */
 export const AssistantNodeView = memo(function AssistantNodeView({
-  node, groupPart, useDisclosure, useGroupAction, useTurnData, turnProcess, openFile, loadImage, fileMentions,
+  node, groupPart, useDisclosure, useGroupAction, useTurnData, turnProcess, displayProcess, openFile, loadImage, fileMentions,
   usePresentation, renderSlot, t, sessionId, useContextMenu, resolveFilePath,
 }: AssistantNodeViewProps) {
   const { getTriggerProps } = useContextMenu()
@@ -39,13 +39,13 @@ export const AssistantNodeView = memo(function AssistantNodeView({
   )
   const keepReplies = usePresentation(policy => policy.foldedReplies === 'all')
   // A kept reply row stays visible while the folded Turn hides its inline reasoning.
-  const reasoningHidden = turnProcess !== undefined
+  const reasoningHidden = (turnProcess !== undefined
     && turnProcess.foldable
     && (keepReplies
       ? groupPart !== 'reasoning'
       : turnProcess.spec.answerStep === data.step && turnProcess.spec.inlineReasoning)
-    && !turnProcess.open
-  const revealProcess = useCallback(() => { turnProcess?.setOpen(true) }, [turnProcess])
+    && !turnProcess.open) || (displayProcess?.foldable === true && !displayProcess.open)
+  const revealProcess = useCallback(() => { turnProcess?.setOpen(true); displayProcess?.setOpen(true) }, [turnProcess, displayProcess])
   return (
     <AssistantMarkdown
       blocks={data.blocks}

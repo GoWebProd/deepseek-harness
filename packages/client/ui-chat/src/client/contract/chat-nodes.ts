@@ -4,6 +4,7 @@ import type {
   ToolCallBlock,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ChatGroupTree } from './group-tree.ts'
+import type { ChatDisplayProcess, ChatDisplayWork } from './display-process.ts'
 
 /** Final Chat render unit produced by a Chat business Definition. */
 export interface ChatConversationViewNode extends ConversationViewNode {
@@ -11,6 +12,10 @@ export interface ChatConversationViewNode extends ConversationViewNode {
   readonly anchorSeq: number
   readonly location: ConversationLocation
   readonly visibility: 'visible' | 'hidden'
+  /** Opt-in work grouping without Engine locations. */
+  readonly displayWork?: ChatDisplayWork | undefined
+  /** Builder-owned summary shared by one loaded display exchange. */
+  readonly displayProcess?: ChatDisplayProcess | undefined
   /**
    * Group-tree position, visible or hidden; absence joins the surrounding step
    * run. An `exchange` Node's Turn and every later Turn before the next opening

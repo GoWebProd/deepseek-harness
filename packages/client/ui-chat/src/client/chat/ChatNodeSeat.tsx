@@ -8,7 +8,7 @@ import type { ChatNode } from '../contract/chat-nodes.ts'
 import type { ChatNodeStore } from '../contract/snapshot.ts'
 import { isAtOrOutside } from '../contract/group-tree.ts'
 import { turnProcessAlwaysOpen } from '../contract/turn-process.ts'
-import { turnProcessOpen } from '../stores.ts'
+import { displayProcessOpen, turnProcessOpen } from '../stores.ts'
 import { hiddenOrCollapsing } from './flow-motion.ts'
 import css from './ChatView.module.css'
 
@@ -71,6 +71,21 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   }, [actions, processSpec, alwaysOpen])
   const foldCompleted = usePresentation(policy => policy.foldCompletedTurns)
   const keepReplies = usePresentation(policy => policy.foldedReplies === 'all')
+  const display = routedNode?.displayProcess
+  const displayStoredOpen = useStore(state => displayProcessOpen(state, display, display?.latest === true && deferCollapse))
+  const displayFoldable = foldCompleted && display?.status === 'completed'
+  const displayOpen = !displayFoldable || displayStoredOpen
+  const setDisplayOpen = useCallback((open: boolean) => {
+    if (display !== undefined && displayFoldable) actions.setDisplayProcessOpen(display.id, display.answerKey, open)
+  }, [actions, display, displayFoldable])
+  const displayHasContent = display !== undefined
+    && (display.toolCallCount > 0 || display.hasReasoning || (!keepReplies && display.messageCount > 0))
+  const displayProcess = useMemo(() => display === undefined ? undefined : {
+    spec: display, hasContent: displayHasContent, foldable: displayFoldable, open: displayOpen, setOpen: setDisplayOpen,
+  }, [display, displayHasContent, displayFoldable, displayOpen, setDisplayOpen])
+  const displayReply = routedNode?.kind === 'assistant-step' && hasAssistantReplyContent(routedNode.data.blocks)
+  const displayMember = display !== undefined && routedNode?.kind !== 'user' && routedNode?.kind !== 'display-process'
+    && (!displayReply || (!keepReplies && routedNode.key !== display.answerKey))
   // A loaded end makes a partial historical Turn eligible without its start.
   const processWindowReady = processSpec !== undefined
     && processPresentation !== undefined
@@ -115,9 +130,12 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   const controllerInactive = routedNode?.kind === 'turn-process'
     && foldCompleted && !foldable
   const processHidden = controllerInactive || (foldable && processMember && !processOpen)
+    || (displayFoldable && displayMember && !displayOpen)
+    || (routedNode?.kind === 'display-process' && !displayHasContent)
   const revealProcess = useCallback(() => {
     if (processMember) setOpen(true)
-  }, [processMember, setOpen])
+    if (displayMember) setDisplayOpen(true)
+  }, [processMember, setOpen, displayMember, setDisplayOpen])
   const wrapperRef = useGroupAction(processHidden, revealProcess)
   const [disclosureReset] = useState(() => createSnapshotStore(0))
   const turnData = turnDataOf(routedNode)
@@ -125,10 +143,10 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     () => ({ turnData, disclosureReset, useGroupAction }), [turnData, disclosureReset, useGroupAction],
   )
   useEffect(() => {
-    if (processMember && processHidden && wrapperRef.current !== null && hiddenOrCollapsing(wrapperRef.current)) {
+    if ((processMember || displayMember) && processHidden && wrapperRef.current !== null && hiddenOrCollapsing(wrapperRef.current)) {
       disclosureReset.set(disclosureReset.getSnapshot() + 1)
     }
-  }, [processMember, processHidden, wrapperRef, disclosureReset])
+  }, [processMember, displayMember, processHidden, wrapperRef, disclosureReset])
   const owner = useMemo<ChatNodeOwnerProps | null>(() => node === undefined
     ? null
     : {
@@ -139,9 +157,10 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       forkAt,
       loadImage,
       turnProcess,
+      displayProcess,
     }, [
     node, groupPart, cwd, openFile, inspectCall, forkAt,
-    loadImage, turnProcess,
+    loadImage, turnProcess, displayProcess,
   ])
   if (routedNode === undefined || owner === null) return null
   // Runtime dispatch owns the correlation: every Node's discriminant is the
@@ -162,6 +181,7 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       data-chat-turn={turn}
       data-turn-process-member={processMember || undefined}
       data-turn-process-hidden={processHidden || undefined}
+      data-display-process-id={display?.id}
     >
       {renderSlot('conversation.chat.node', routedOwner, {
         entryKey: routedNode.kind,
