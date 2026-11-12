@@ -2,6 +2,24 @@
   border-radius: var(--dsw-radius-sm);
 }
 
+.materialStatus {
+  padding: 4px 22px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.materialStatus p { margin: 0; }
+.materialStatus button {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  margin-top: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
 .subCalls {
   display: flex;
   flex-direction: column;

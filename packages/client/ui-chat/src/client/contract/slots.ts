@@ -164,16 +164,42 @@ export type UseChatNodeTurnData = <Key extends Extract<keyof ConversationTurnDat
   key: Key,
 ) => Readonly<ConversationTurnDataMap[Key]> | undefined
 
-/**
- * Subscribe to enclosing-Turn resets and own one initially collapsed disclosure.
- * Each invocation has independent open state; display-mode changes do not reset it.
- * @returns the current open state, explicit setter, and toggle action.
- */
-export type UseDisclosure = () => {
+/** Current disclosure state and its local controls. */
+export type DisclosureState = {
   readonly expanded: boolean
   /** @param open - whether this disclosure is expanded. */
   readonly setExpanded: (open: boolean) => void
   readonly toggle: () => void
+}
+
+/** Inert view data whose resources are held only by committed snapshot readers. */
+export interface DisclosureObserver<State> extends ObservableSnapshot<State> {
+  /** Acquire view resources; may run again after a Strict Mode release. */
+  activate(): void
+  /** @param expanded - whether any bound disclosure is expanded. */
+  setExpanded(expanded: boolean): void
+  /** Release pending work and listeners after the last snapshot reader leaves. */
+  dispose(): void
+}
+
+/** Framework-created hooks over one disclosure and its optional observed view data. */
+export interface DisclosureBinding<State> {
+  readonly useDisclosure: UseDisclosure
+  readonly useSnapshot: () => State
+}
+
+/**
+ * Own independent open state and subscribe to enclosing-Turn resets.
+ * Display-mode changes do not reset it. Framework bindings may observe view data.
+ * @returns the current open state, explicit setter, and toggle action.
+ */
+export type UseDisclosure = {
+  (): DisclosureState
+  /**
+   * @param observer - one inert source per view; snapshots stay stable until changed.
+   * @returns framework hooks owning committed subscription, activation, and disposal.
+   */
+  withObserver?<State>(observer: DisclosureObserver<State>): DisclosureBinding<State>
 }
 
 /**

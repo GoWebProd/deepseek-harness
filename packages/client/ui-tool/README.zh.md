@@ -37,6 +37,10 @@ kind: "package-reference"
 
 ### 注册业务工具视图
 
+历史提供方可通过可选的 Session 标准属性 `createToolMaterial(source, callId)` 为每个视图准备一个惰性的 `ToolMaterialHandle`。根调用收到 Chat 节点的展示数据，嵌套调用收到 `undefined`；无关调用返回 `undefined` 并保留原有呈现。准备过程不获取资源；快照在数据变化前保留引用。
+
+Chat 的[展开状态绑定](../ui-chat/README.zh.md#grouped-rendering)负责提交后的激活、快照订阅、展开观察和释放。句柄支持 Strict Mode 清理后的重新激活。提供方仅在展开时读取完整的只读参数和结果，折叠或释放时取消未完成的读取，并发布替换 `block` 及本地化的加载与重试文案。加载、失败和重试仍在原调用条目内展示；重试只重复读取，不执行工具。切换有无数据源时，原子卡片重新挂载以隔离 Hook 生命周期。本 API 不触发工具执行、Session 事件或模型请求。
+
 拥有该视图的业务包将其 wire 工具名称注册进 `tool.call.toolview`：
 
 ```text
