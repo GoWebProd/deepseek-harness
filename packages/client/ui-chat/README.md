@@ -78,6 +78,8 @@ Chat adapts Markdown targets at `MarkdownDelegateProvider.getTriggerProps`. The 
 <a id="turn-token-usage"></a>
 ## Turn token usage
 
+Composer activity and usage pills are hidden for external history, whose display events do not describe native model steps or token accounting. Native Sessions retain these readings.
+
 A completed Turn shows an expandable usage row only when the loaded window includes `turn/start` and every started model attempt reports safe, exact usage. The row omits unavailable optional buckets. Incomplete or contradictory accounting hides the complete disclosure instead of presenting a partial total.
 
 Settings → General → Performance & usage appears after Send behavior while busy and before Session Log upload, and stores `ui-chat.performanceUsage` as `detailed` (default) or `compact`. Compact shows only available output speed and cache-hit percentage beneath the composer, without interactive statistic dialogs or per-Turn usage. Detailed exposes session statistics and per-Turn token usage. Neither mode shows elapsed time in the completed-turn footer. The preference changes presentation only; accounting and Session events remain intact.
@@ -145,6 +147,8 @@ Process rows share one text and icon color in every Work details mode: tertiary 
 
 <a id="scroll-ownership"></a>
 ## Scroll ownership
+
+Histories without native Turn boundaries can mark session-level Chat nodes with `navigation: { kind: 'message', position }`. The unique, ordered display position stays stable across paging and streaming. The existing rail then shows loaded messages, highlights the reading position, previews text, and jumps to their rows. These marks create no native Turn locations or model requests; older marks appear when their page loads. Without message marks, native Turn navigation is unchanged.
 
 Chat waits for initial history before automatic content, scroll, or size updates initialize reading state. Running Sessions restore their initial visibility and position before fold animations become eligible.
 

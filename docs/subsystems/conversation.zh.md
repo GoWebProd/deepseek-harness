@@ -8,7 +8,9 @@ Conversation 是 Client `SessionEventLikeEntry` window 与浏览器 view 之间�
 
 ## 数据模型与所有权
 
-Session Controller 拥有连续的已加载逻辑 event window。每个 `SessionEventLikeEntry` 要么是表示一个持久事件的 `{ type: 'event', event: SessionEvent }`，要么是表示一个 Client-only `assistant/live-chunk` 呈现的 `{ type: 'transient', event: AssistantLiveChunkEvent }`；两种内部 event 都公开 `type`、`seq`、`time` 与 `data`。`ui-conversation` 把这些 entry 直接交给 assembler，不另开 history stream。每个 Session 对应一个 `ConversationNodeAssembler`，它应用所有已注册 Definition，并为每个已注册 view target 发布独立 source。
+Session Controller 拥有已加载、有序的逻辑 event window。对于原生历史，每个 `SessionEventLikeEntry` 要么是表示一个持久事件的 `{ type: 'event', event: SessionEvent }`，要么是表示一个 Client-only `assistant/live-chunk` 呈现的 `{ type: 'transient', event: AssistantLiveChunkEvent }`；两种内部 event 都公开 `type`、`seq`、`time` 与 `data`。`ui-conversation` 把这些 entry 直接交给 assembler，不另开 history stream。每个 Session 对应一个 `ConversationNodeAssembler`，它应用所有已注册 Definition，并为每个已注册 view target 发布独立 source。
+
+[外部展示历史](../../packages/api/session-controller/README.zh.md#external-display-history)通过同一个窗口提供呈现事件，不把它们加入原生 Session 日志。其有序位置和数据源 generation 仅属于展示；原生元数据投影游标保持独立。数据源自己的 Definition 与 renderer 消费这些事实。展示事件的存在不意味着精确模型请求、原生 fork 位置或重放能力可用。
 
 | 概念 | Owner 与用途 |
 |---|---|

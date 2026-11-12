@@ -1,6 +1,7 @@
 /** Independent Session snapshots and passive event subscriptions. */
 
 import type { Context } from '@deepseek-ai/cordis'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionLogOffset, SessionSeq, isAppendSurfaceEvent } from '@deepseek-ai/dsh-session'
 import type { SessionId, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionObservation } from '@deepseek-ai/dsh-session-query'
@@ -11,6 +12,7 @@ import {
 } from '../history.ts'
 import { EventListener, ProjectionListener } from './listener.ts'
 import { SessionAssistantStreamsListener } from './assistant-stream.ts'
+import type { ExternalHistoryController } from '../external-history.ts'
 import type {
   SessionEventFrame, SessionEventsPage, SessionPageRequest,
   SessionObserveEventRequest, SessionProjectionsRequest, SessionProjectionFrame,
@@ -25,7 +27,7 @@ export class HistoryController {
   readonly streamsListener: SessionAssistantStreamsListener
 
   /** @param ctx - Host context carrying Session reads and projections. */
-  constructor(private readonly ctx: Context) {
+  constructor(private readonly ctx: Context, private readonly externalHistory?: ExternalHistoryController) {
     this.streamsListener = new SessionAssistantStreamsListener(this.ctx)
   }
 
@@ -36,6 +38,7 @@ export class HistoryController {
    * @returns a page at the supplied cut, or the observed log end when omitted.
    */
   async events(request: SessionPageRequest, signal: AbortSignal): Promise<SessionEventsPage> {
+    await this.assertNative(addressId(request.address), 'events', signal)
     const spec = resolveHistoryRequest(request)
     try {
       return await this.usingObservation({ sessionId: addressId(request.address), projection: request.address.kind === 'subagent' }, signal, (observation) => {
@@ -55,6 +58,7 @@ export class HistoryController {
    * @returns subscription readiness followed by event frames; readiness does not establish existence.
    */
   async *observeEvent(request: SessionObserveEventRequest, signal: AbortSignal): AsyncIterable<SessionEventFrame> {
+    await this.assertNative(addressId(request.address), 'observeEvent', signal)
     using listener = new EventListener(this.ctx, addressId(request.address), signal)
     yield { type: 'ready' }
     yield* listener.events()
@@ -78,6 +82,7 @@ export class HistoryController {
         const snapshot = this.ctx.sessionProjections.snapshot(live)
         return { kind: 'sequenced', asOfSeq: snapshot.asOfSeq, values: snapshot.values as SessionProjectionValues }
       } else {
+        if (this.externalHistory !== undefined && (await this.externalHistory.info({ address: { kind: 'session', sessionId } }, signal)).kind === 'external') return null
         const stored = await this.ctx.get('sessionPersistence')?.stat(sessionId, { signal })
         signal.throwIfAborted()
         if (stored?.formatStatus === 'migration-required') {
@@ -126,6 +131,7 @@ export class HistoryController {
   async assistantOutput(
     sessionId: SessionId, afterSeq: number, throughSeq: number, maxMessages: number, signal: AbortSignal,
   ): Promise<SessionWaitOutput> {
+    await this.assertNative(sessionId, 'assistantOutput', signal)
     return this.usingObservation({ sessionId, projection: false }, signal, (observation) => {
       if (throughSeq > observation.cursor) {
         throw new RemoteError('gateway/internal', 'Session history no longer covers the wait cursor', {})
@@ -140,6 +146,24 @@ export class HistoryController {
       }
       return { records, truncated: false }
     })
+  }
+
+  /** Reject native positions for externally owned display history.
+   * @param sessionId - native operation target.
+   * @param operation - operation name.
+   * @param signal - lookup cancellation.
+   */
+  async assertNative(sessionId: SessionId, operation: string, signal: AbortSignal): Promise<void> {
+    await this.externalHistory?.assertNative(sessionId, operation, signal)
+  }
+
+  /** Resolve cold external execution independently of native persistence.
+   * @param sessionId - cold identity.
+   * @param signal - cancels this caller's wait for shared activation.
+   * @returns an externally owned Agent or native delegation.
+   */
+  activateExternal(sessionId: SessionId, signal: AbortSignal): Promise<Agent | undefined> {
+    return this.externalHistory?.activate(sessionId, signal) ?? Promise.resolve(undefined)
   }
 
   /**

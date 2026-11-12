@@ -3,6 +3,7 @@ import { addAbortListener } from 'node:events'
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type {} from '@deepseek-ai/dsh-api-session-controller'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-tool-executor-ptc'
@@ -106,6 +107,8 @@ export default class SessionToolResults extends TypertRemoteService {
   async *watch(request: SessionToolResultRequest, signal: AbortSignal): AsyncIterable<SessionToolResultValue> {
     const lifetime = AbortSignal.any([signal, this.lifetime.signal])
     if (lifetime.aborted) return
+    await this.ctx.get('sessionHistory')?.assertNative(request.sessionId, 'toolResults/watch', lifetime)
+    if (signal.aborted || this.lifetime.signal.aborted) return
     const state = this.forRequest(request)
     let update = Promise.withResolvers<void>()
     const changed = (seq?: number): void => {

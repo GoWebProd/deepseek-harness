@@ -25,6 +25,22 @@ const items: readonly TurnRailItem[] = Array.from({ length: 1_000 }, (_, index) 
 const t = makeTranslate(zh, commonZh)
 
 describe('TurnNavigator', () => {
+  it('labels external messages and highlights and activates their display positions', async () => {
+    installTurnNavigatorObserver()
+    const onNavigate = vi.fn()
+    const messages: readonly TurnRailItem[] = items.slice(0, 3).map((item, index) => ({
+      ...item, kind: 'message', turn: index * 1_000_000,
+    }))
+    const view = render(<TurnNavigator items={messages} activeTurn={1_000_000} busyTurn={null} onNavigate={onNavigate} t={t} />)
+    const nav = view.getByRole('navigation', { name: '消息导航' })
+    const active = await within(nav).findByRole('button', { name: '跳转到消息 2' })
+    expect(active.getAttribute('aria-current')).toBe('true')
+    fireEvent.click(within(nav).getByRole('button', { name: '跳转到消息 1' }))
+    expect(onNavigate).toHaveBeenCalledWith(messages[0])
+    fireEvent.pointerMove(active)
+    expect(view.getByRole('tooltip').textContent).toContain('prompt 2')
+  })
+
   it('places the latest committed active turn on its first viewport size without scroll commands', () => {
     const observer = installTurnNavigatorObserver(null)
     const onNavigate = vi.fn()

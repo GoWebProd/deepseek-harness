@@ -63,7 +63,7 @@ const TurnMark = memo(function TurnMark({
       data-index={index}
       type="button"
       className={classes.join(' ')}
-      aria-label={t(
+      aria-label={item.kind === 'message' ? t('chat.messageNavigation.jump', { message: index + 1 }) : t(
         item.anchor.kind === 'loaded' ? 'chat.turnNavigation.jump' : 'chat.turnNavigation.jumpLoad',
         { turn: item.turn },
       )}
@@ -234,7 +234,7 @@ function TurnNavigatorRail(
     <div className={css.slot}>
       <nav
         className={css.frame}
-        aria-label={t('chat.turnNavigation.label')}
+        aria-label={t(items[0]?.kind === 'message' ? 'chat.messageNavigation.label' : 'chat.turnNavigation.label')}
         onPointerEnter={() => { pointerInsideRef.current = true }}
         onPointerLeave={() => {
           pointerInsideRef.current = false
@@ -274,7 +274,9 @@ function TurnNavigatorRail(
             } as CSSProperties}
           >
             <div className={css.previewPrompt}>
-              {preview.prompt || t('chat.turnNavigation.turn', { turn: preview.turn })}
+              {preview.prompt || (preview.kind === 'message'
+                ? t('chat.messageNavigation.message', { message: (previewIndex ?? 0) + 1 })
+                : t('chat.turnNavigation.turn', { turn: preview.turn }))}
             </div>
             {preview.response !== '' && <div className={css.previewResponse}>{preview.response}</div>}
           </div>

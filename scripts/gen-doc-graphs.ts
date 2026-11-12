@@ -355,6 +355,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns Session commands, cold reads, durable-event following, live control state, model catalogs, workspace opening, and Agent activation policy.',
   },
   {
+    key: 'sessionHistory',
+    pkg: 'api-session-controller',
+    title: 'External display history provider registry',
+    mode: 'seam',
+    consumers: ['api-session-controller', 'client-ui-trajectory'],
+    note: 'Scopes external display discovery, pages, observation, and activation to registered providers without adding display records to native journals.',
+  },
+  {
     key: 'sessionFileReferences',
     pkg: 'api-session-controller',
     title: 'Session-addressed file-reference Remote adapter',

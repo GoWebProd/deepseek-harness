@@ -1,6 +1,6 @@
 /** Incremental raw Session rows with lossless Assistant stream children. */
 
-import type { SessionEventSource, SessionEventWindow, SessionEventLikeEntry } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { IgnorablePluginRecordEvent, SessionEventLike, SessionEventSource, SessionEventWindow, SessionEventLikeEntry } from '@deepseek-ai/dsh-api-session-controller/client'
 import { createSnapshotStore, type ObservableSnapshot, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { expandAssistantStream, type AssistantStreamRecord, type TimedStreamChunk } from '@deepseek-ai/dsh-llm/assistant-stream'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -10,6 +10,10 @@ import { AssistantLogStream } from './stream.ts'
 import { SessionLogGroups } from './groups.ts'
 import type { InspectorPickTarget } from '../chat-node/pick-match.ts'
 import type { SessionLogAnchor } from './chat-target.ts'
+
+function isIgnorablePluginRecordEvent(event: SessionEventLike): event is IgnorablePluginRecordEvent {
+  return event.type.startsWith('plugin:') && 'ignorable' in event && event.ignorable
+}
 
 interface LogRoot {
   readonly row: InspectorRow
@@ -68,6 +72,7 @@ export class SessionLogModel implements ObservableSnapshot<readonly InspectorRow
     this.accept(window)
     const entries = window.entries
     const sameStep = (entry: SessionEventLikeEntry): boolean => {
+      if (isIgnorablePluginRecordEvent(entry.event)) return false
       const data = entry.event.data
       return target.turn !== undefined && 'turn' in data && data.turn === target.turn
         && (target.step === undefined || ('step' in data && data.step === target.step))
@@ -180,8 +185,8 @@ export class SessionLogModel implements ObservableSnapshot<readonly InspectorRow
     }
     const event = entry.event
     const key = this.settledRoots.get(event.seq) ?? `event:${event.seq}`
-    const data = event.data
-    const location = 'turn' in data ? `${data.turn}${'step' in data ? `/${data.step}` : ''}` : ''
+    const location = isIgnorablePluginRecordEvent(event) ? ''
+      : 'turn' in event.data ? `${event.data.turn}${'step' in event.data ? `/${event.data.step}` : ''}` : ''
     this.put(key, { type: event.type, identity: String(event.seq), time: event.time, location, value: event })
     if (entry.event.type === 'assistant/message' || entry.event.type === 'assistant/attempt') {
       const hierarchy = new AssistantLogStream(key)

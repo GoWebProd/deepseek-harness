@@ -159,7 +159,7 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       data-chat-node-key={routedNode.key}
       data-chat-group-part={groupPart}
       data-chat-flow-kind={routedNode.kind}
-      data-chat-turn={turn}
+      data-chat-turn={turn ?? routedNode.navigation?.position}
       data-turn-process-member={processMember || undefined}
       data-turn-process-hidden={processHidden || undefined}
     >

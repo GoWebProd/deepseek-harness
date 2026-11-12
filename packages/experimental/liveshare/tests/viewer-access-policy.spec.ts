@@ -48,6 +48,7 @@ const SESSION_READS = [
   'commands/list', 'fileUploads/upload', 'goals/get', 'session/attachment', 'session/control',
   'session/events', 'session/follow', 'session/list', 'session/observeEvent', 'session/observeProjections',
   'session/observeState', 'session/page', 'session/projections', 'session/state', 'session/wait',
+  'sessionHistory/info',
   'skills/list', 'toolResults/watch', 'workspace/follow',
 ] as const
 const SESSION_EVENTS = [
@@ -207,6 +208,16 @@ describe('share reader access policy', () => {
     expect(decide('session/prompt', session('second'), CALL)).toEqual(ALLOW)
     expect(decide('session/fork', session('second'), CALL)).toEqual(ALLOW)
     expect(decide('session/page', session('private'))).toEqual(deny('liveshare/read-only'))
+  })
+
+  it('keeps external history pages and observation outside reader grants', async () => {
+    const { decide, grants } = await fixture()
+    for (const action of ['sessionHistory/page', 'sessionHistory/observe'] as const) {
+      for (const resource of [GLOBAL, session('source'), session('own-child'), session('private')]) {
+        expect(decide(action, resource)).toEqual(deny('liveshare/read-only'))
+      }
+      expect(grants().some(grant => grant.actions.includes(action))).toBe(false)
+    }
   })
 
   it('forwards Session notifications about the shared Session and the reader’s own forks only', async () => {

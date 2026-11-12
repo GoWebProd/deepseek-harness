@@ -1,9 +1,14 @@
 import type { Context } from '@deepseek-ai/cordis'
+import type { IgnorablePluginRecordEvent, SessionEventLike } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
   ConversationNodeDefinition, UnknownSurfaceNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { isAppendSurfaceEvent } from '@deepseek-ai/dsh-session/surface'
 import { chatNode } from './common.ts'
+
+function isIgnorablePluginRecordEvent(event: SessionEventLike): event is IgnorablePluginRecordEvent {
+  return event.type.startsWith('plugin:') && 'ignorable' in event && event.ignorable
+}
 
 declare module '../contract/chat-nodes.ts' {
   interface ChatNodeDataMap {
@@ -16,7 +21,7 @@ declare module '../contract/chat-nodes.ts' {
 export const unknownFallbackDefinition: ConversationNodeDefinition<UnknownSurfaceNode> = {
   kind: 'unknown-surface',
   target: 'chat',
-  match: event => event.type !== 'assistant/live-chunk' && isAppendSurfaceEvent(event)
+  match: event => event.type !== 'assistant/live-chunk' && !isIgnorablePluginRecordEvent(event) && isAppendSurfaceEvent(event)
     ? { id: String(event.seq), role: 'start' }
     : null,
   start: (_context, match) => ({

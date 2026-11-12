@@ -4,6 +4,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { RemoteFailure } from '@deepseek-ai/dsh-typert-protocol'
 import type { SessionRequestId } from '../../types.ts'
+import type { ExternalHistoryInfo } from '../../external-history-types.ts'
 
 /** One image displayed by a local submission echo before durable admission. */
 export interface PendingSubmissionImage {
@@ -84,6 +85,8 @@ export interface SessionSnapshot {
   readonly loadingOlder: boolean
   /** History request status; pendingConsumption retains an unpublished ordinary page. */
   readonly historyLoadStatus: 'idle' | 'loading' | 'pendingConsumption' | 'error'
+  /** External display coordinates cannot address native journal operations. Absence selects native history. */
+  readonly historySource?: Extract<ExternalHistoryInfo, { readonly kind: 'external' }>
   readonly promptError: PromptError | null
   readonly blank: boolean
   readonly lastAgentError: string | null

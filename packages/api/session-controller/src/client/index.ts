@@ -55,6 +55,7 @@ export type {
 export { MutableSessionEventSource } from './contract/events.ts'
 export type {
   AssistantLiveChunkEvent,
+  IgnorablePluginRecordEvent,
   SessionAssistantSettlementEntry,
   SessionEventChange,
   SessionEventLike,
@@ -102,6 +103,7 @@ export const inject = [
   'remote',
   'remote.commands',
   'remote.session',
+  'remote.sessionHistory',
   'remote.subagents',
 ]
 

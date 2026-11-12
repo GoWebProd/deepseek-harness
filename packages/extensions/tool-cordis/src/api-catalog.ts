@@ -2901,6 +2901,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the live Agent or the stable Session-domain failure.',
       },
       {
+        signature: 'registerExternalHistoryProvider(provider: ExternalHistoryProvider): () => Promise<void>',
+        description: 'Register an external display source in the caller plugin\'s lifetime.',
+        parameters: [{ name: 'provider', description: 'passive external display resolver.' }],
+        returns: 'disposer cancelling and draining its reads.',
+      },
+      {
         signature: '@Remote(\'list\') async list(_request: SessionListRequest, signal: AbortSignal): Promise<SessionListValue>',
         description: 'Read all visible Session rows without resuming an Agent.',
         parameters: [{ name: '_request', description: 'reserved empty list request.' }, { name: 'signal', description: 'cancellation for persistence reads and summary generation.' }],
@@ -3077,6 +3083,48 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'List file and directory candidates for one Agent\'s working directory.',
         parameters: [{ name: 'agent', description: 'target Agent resolved from the Session identity on the wire.' }, { name: 'query', description: 'path text following `@` or `@"`.' }, { name: 'signal', description: 'caller cancellation.' }],
         returns: 'deterministic path-only candidates from the composed provider.',
+      },
+    ],
+  },
+  {
+    key: 'sessionHistory',
+    summary: 'Registry ownership covers provider calls and upstream iterators, never Agent execution.',
+    description: 'Registry ownership covers provider calls and upstream iterators, never Agent execution.',
+    methods: [
+      {
+        signature: 'register(owner: Context, provider: ExternalHistoryProvider): () => Promise<void>',
+        description: 'Scope provider reads and subscriptions to their registering plugin.',
+        parameters: [{ name: 'owner', description: 'registering plugin context.' }, { name: 'provider', description: 'passive resolver.' }],
+        returns: 'awaited provider teardown.',
+      },
+      {
+        signature: '@Remote({ resources: { session: request => addressId(request.address) } }) async info(request: ExternalHistoryInfoRequest, signal: AbortSignal): Promise<ExternalHistoryInfo>',
+        description: 'Discover display ownership without reading history or activating an Agent.',
+        parameters: [{ name: 'request', description: 'authorized identity.' }, { name: 'signal', description: 'discovery cancellation.' }],
+        returns: 'the selected display family.',
+      },
+      {
+        signature: '@Remote({ resources: { session: request => addressId(request.address) } }) async page(request: ExternalHistoryPageRequest, signal: AbortSignal): Promise<ExternalHistoryPage>',
+        description: 'Read one provider-owned display window.',
+        parameters: [{ name: 'request', description: 'authorized page window.' }, { name: 'signal', description: 'read cancellation.' }],
+        returns: 'provider-owned display data.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\', resources: { session: request => addressId(request.address) } }) async *observe(request: ExternalHistoryObserveRequest, signal: AbortSignal): AsyncIterable<ExternalHistoryFrame>',
+        description: 'Observe a provider without acquiring or stopping its Agent.',
+        parameters: [{ name: 'request', description: 'authorized reconnect position.' }, { name: 'signal', description: 'observation lifetime.' }],
+        returns: 'snapshot-first display frames.',
+      },
+      {
+        signature: 'async activate(sessionId: SessionId, signal: AbortSignal = this.lifetime.signal): Promise<Agent | undefined>',
+        description: 'Deduplicate concurrent external activation without a native persistence read.',
+        parameters: [{ name: 'sessionId', description: 'ordinary Session identity.' }, { name: 'signal', description: 'cancellation of this caller\'s wait.' }],
+        returns: 'an external Agent or native delegation.',
+      },
+      {
+        signature: 'async assertNative(sessionId: SessionId, operation: string, signal: AbortSignal = this.lifetime.signal): Promise<void>',
+        description: 'Reject use of display positions in a native journal operation.',
+        parameters: [{ name: 'sessionId', description: 'native operation target.' }, { name: 'operation', description: 'operation name.' }, { name: 'signal', description: 'lookup cancellation.' }],
       },
     ],
   },
@@ -6704,6 +6752,38 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'EveryScheduleRecord',
     declaration: 'export interface EveryScheduleRecord {\n    readonly id: ScheduleId;\n    readonly kind: \'every\';\n    readonly title: string;\n    readonly prompt: string;\n    readonly everySeconds: number;\n    readonly scheduledAt: string;\n}',
+  },
+  {
+    name: 'ExternalHistoryFrame',
+    declaration: 'export type ExternalHistoryFrame = {\n    readonly type: \'replace\';\n    readonly page: ExternalHistoryPage;\n} | {\n    readonly type: \'append\';\n    readonly generation: string;\n    readonly entries: readonly SessionWireEvent[];\n    readonly resumeCursor?: string;\n} | {\n    readonly type: \'patch\';\n    readonly generation: string;\n    readonly entries: readonly SessionWireEvent[];\n    readonly removed?: readonly number[];\n    readonly resumeCursor?: string;\n} | {\n    readonly type: \'input-accepted\';\n    readonly generation: string;\n    readonly requestIds: readonly SessionRequestId[];\n};',
+  },
+  {
+    name: 'ExternalHistoryInfo',
+    declaration: 'export type ExternalHistoryInfo = {\n    readonly kind: \'native\';\n} | {\n    readonly kind: \'external\';\n    readonly sourceId: string;\n    readonly header: SessionWireHeader;\n    readonly capabilities: {\n        readonly nativeJournal: false;\n    };\n};',
+  },
+  {
+    name: 'ExternalHistoryInfoRequest',
+    declaration: 'export interface ExternalHistoryInfoRequest {\n    readonly address: SessionAddress;\n}',
+  },
+  {
+    name: 'ExternalHistoryObserveRequest',
+    declaration: 'export interface ExternalHistoryObserveRequest extends ExternalHistoryInfoRequest {\n    readonly resumeCursor?: string;\n    readonly generation?: string;\n}',
+  },
+  {
+    name: 'ExternalHistoryPage',
+    declaration: 'export interface ExternalHistoryPage {\n    readonly generation: string;\n    readonly entries: readonly SessionWireEvent[];\n    readonly beforeCursor?: string;\n    readonly resumeCursor?: string;\n    readonly hasMore: boolean;\n    readonly acceptedRequestIds?: readonly SessionRequestId[];\n}',
+  },
+  {
+    name: 'ExternalHistoryPageRequest',
+    declaration: 'export interface ExternalHistoryPageRequest extends ExternalHistoryInfoRequest {\n    readonly beforeCursor?: string;\n    readonly generation?: string;\n    readonly limit?: number;\n}',
+  },
+  {
+    name: 'ExternalHistoryProvider',
+    declaration: 'export interface ExternalHistoryProvider {\n    readonly id: string;\n    resolve(address: SessionAddress, signal: AbortSignal): Promise<ExternalHistorySource | undefined>;\n}',
+  },
+  {
+    name: 'ExternalHistorySource',
+    declaration: 'export interface ExternalHistorySource {\n    readonly header: SessionWireHeader;\n    page(request: ExternalHistoryPageRequest, signal: AbortSignal): Promise<ExternalHistoryPage>;\n    observe(request: ExternalHistoryObserveRequest, signal: AbortSignal): AsyncIterable<ExternalHistoryFrame>;\n    activate(signal: AbortSignal): Promise<Agent>;\n}',
   },
   {
     name: 'FeedbackCategory',

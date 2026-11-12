@@ -264,7 +264,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-session-controller`
 
 - `inject`: `agentDefaultModel` · `agents` · `attachments` · `fileUploads` · `fs` · `llm` · `remoteAccess` · `sessions` · `sessionProjections` · `sessionQuery` · `typert` · `typertGateway` · `workspaceRegistry`
-- `source`: [`packages/api/session-controller/src/index.ts:110`](../packages/api/session-controller/src/index.ts)
+- `source`: [`packages/api/session-controller/src/index.ts:115`](../packages/api/session-controller/src/index.ts)
 
 ```ts config-catalog
 /** Session Controller deployment policy. */
@@ -766,7 +766,7 @@ export type ThemePreference = typeof THEME_PREFERENCES[number]
 ## `@deepseek-ai/dsh-client-ui-trajectory`
 
 - `inject`: `sessions` · `typert`
-- `source`: [`packages/client/ui-trajectory/src/index.ts:25`](../packages/client/ui-trajectory/src/index.ts)
+- `source`: [`packages/client/ui-trajectory/src/index.ts:26`](../packages/client/ui-trajectory/src/index.ts)
 
 ```ts config-catalog
 /** Count limit for each live Session's transient tool results. */

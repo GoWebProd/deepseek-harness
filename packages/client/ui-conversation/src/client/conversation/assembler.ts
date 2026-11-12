@@ -1,5 +1,5 @@
 import type {
-  SessionAssistantSettlementEntry, SessionEventLikeEntry, SessionTransientEventEntry,
+  SessionAssistantSettlementEntry, SessionEventLike, SessionEventLikeEntry, SessionTransientEventEntry,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { LlmAttemptId } from '@deepseek-ai/dsh-llm/brand'
 import type {
@@ -282,7 +282,7 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     if (this.revised.size > 0) this.revised.clear()
     this.inputs.set(event.seq, record)
     let publication: ConversationPublication = 'none'
-    if (event.type !== 'assistant/live-chunk' && isLocationBoundary(event.type)) {
+    if (isLocationBoundary(event)) {
       const previousTimeline = this.locationIndex.snapshot()
       const changed = this.locationIndex.appendBoundary(event)
       if (this.locationIndex.snapshot() !== previousTimeline) {
@@ -1150,8 +1150,8 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
   }
 }
 
-function isLocationBoundary(type: string): boolean {
-  return type === 'turn/start' || type === 'turn/end' || type === 'step/start' || type === 'step/end'
+function isLocationBoundary(event: SessionEventLike): event is Extract<SessionEventLike, { type: 'turn/start' | 'turn/end' | 'step/start' | 'step/end' }> {
+  return event.type === 'turn/start' || event.type === 'turn/end' || event.type === 'step/start' || event.type === 'step/end'
 }
 
 function requireState(

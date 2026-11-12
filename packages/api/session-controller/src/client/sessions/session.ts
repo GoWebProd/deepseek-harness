@@ -9,6 +9,8 @@ import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { UserMessage } from '@deepseek-ai/dsh-llm/types'
 import { SessionLogOffset, SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
 import { SessionEventStream } from '../transport.ts'
+import { ExternalSessionHistory, type ExternalHistoryChange } from './external-history.ts'
+import type { ExternalHistoryInfo } from '../../external-history-types.ts'
 import type { SessionJournalChange } from '../transport.ts'
 import type {
   PromptContentPart,
@@ -70,6 +72,7 @@ interface PendingHistory {
 interface OlderHistoryRequest {
   readonly generation: number
   readonly beforeSeq: SessionLogOffset
+  displayBefore: number | undefined
   page: { readonly entries: readonly SessionEventLikeEntry[]; readonly hasMore: boolean } | null
   invalidated: boolean
   recovering: boolean
@@ -77,14 +80,15 @@ interface OlderHistoryRequest {
   promise?: Promise<void>
 }
 
+type SessionHistoryEvents = SessionEventStream | ExternalSessionHistory
+
 /** Manager-owned observers of a Session object's local state edges. */
 export interface SessionOptions {
   /** Catalog-discovered address selecting non-activating subagent transport. */
   address?: SubagentAddress
   /**
-   * Publish each accepted prompt to the Manager, including after this Session
-   * object is replaced. Acceptance converts display state, but does not
-   * establish that a turn started or reached durable history.
+   * Publish accepted prompts and the first nonempty external display baseline to the Manager.
+   * Engagement converts display state without asserting a native turn boundary.
    */
   onEngaged?(session: Session): void
   /**
@@ -115,6 +119,8 @@ export class Session implements SessionFace {
   private get loadingOlder(): boolean { return this.historyLoadStatus === 'loading' }
   private historyLoadStatus: SessionSnapshot['historyLoadStatus'] = 'idle'
   private olderRequest: OlderHistoryRequest | null = null
+  private openingAbort: AbortController | undefined
+  private historySource: Extract<ExternalHistoryInfo, { readonly kind: 'external' }> | undefined
   /** Shared low-water target of the running jump loop; null when no jump is paging. */
   private jumpTargetSeq: SessionSeq | null = null
   /** The running jump loop's completion, shared by retargeting callers. */
@@ -136,6 +142,8 @@ export class Session implements SessionFace {
   private blankBit = true
   private removed = false
   private promptError: PromptError | null = null
+  /** Keep acceptance authority until the prompt returns, including after echo retirement or disposal. */
+  private readonly pendingPromptReceipts = new Map<SessionRequestId, { accepted: boolean }>()
   private lastAgentError: string | null = null
   /** Local submission echoes, insertion-ordered, including those the Host has not accepted yet. */
   private pendingSubmissions: readonly PendingSubmission[] = []
@@ -161,7 +169,7 @@ export class Session implements SessionFace {
     retiring: boolean
   }>()
   /** Owns the addressed page/follow lifecycle while this Session is open. */
-  private events: SessionEventStream | undefined
+  private events: SessionHistoryEvents | undefined
 
   /**
    * Per-session projection value store (push model; see the session-projection
@@ -259,7 +267,8 @@ export class Session implements SessionFace {
   /**
    * Send (queue/steer passed through 1:1); failures land in the snapshot's
    * promptError. The Host can hold the prompt at its admission stage, so the
-   * call can stay open; the echo appears and the blank → engaging edge flips
+   * call can stay open; an external receipt for the same request overrides a late RPC failure.
+   * The echo appears and the blank → engaging edge flips
    * only once the Host accepts the prompt.
    * @param content - text, browser-owned temporary image uploads, and staged-file receipts.
    * @param mode - queue appends after the current turn; steer interrupts it.
@@ -278,38 +287,46 @@ export class Session implements SessionFace {
     // Before the first await, so a turn observed ahead of the receipt clears it.
     const firstPrompt = this.blankBit && !this.firstPromptPendingTurn
     if (firstPrompt) this.firstPromptPendingTurn = true
+    const effectiveRequestId = requestId ?? randomUUID() as SessionRequestId
+    const receipt = { accepted: false }
+    this.pendingPromptReceipts.set(effectiveRequestId, receipt)
     let result: RemoteResult<{ accepted: true }>
-    if (this.address === undefined) {
-      const clientTimeZone = resolvedClientTimeZone()
-      result = await this.remote.session.prompt({
-        requestId: requestId ?? randomUUID() as SessionRequestId,
-        sessionId: this.sessionId,
-        mode,
-        content,
-        clientTimeZone,
-      }, signal)
-    } else if (content.some(part => part.type === 'file')) {
-      result = {
-        ok: false,
-        error: new RemoteError(
-          'subagent/attachment-invalid',
-          'subagent continuation does not accept files',
-          { reason: 'SUBAGENT_FILE_UNSUPPORTED' },
-        ),
+    try {
+      if (this.address === undefined) {
+        const clientTimeZone = resolvedClientTimeZone()
+        result = await this.remote.session.prompt({
+          requestId: effectiveRequestId,
+          sessionId: this.sessionId,
+          mode,
+          content,
+          clientTimeZone,
+        }, signal)
+      } else if (content.some(part => part.type === 'file')) {
+        result = {
+          ok: false,
+          error: new RemoteError(
+            'subagent/attachment-invalid',
+            'subagent continuation does not accept files',
+            { reason: 'SUBAGENT_FILE_UNSUPPORTED' },
+          ),
+        }
+      } else {
+        // The preceding branch rejects file parts before the narrower subagent
+        // wire type is used; this array is not filtered or reordered.
+        const routedContent = content as Exclude<PromptContentPart, { readonly type: 'file' }>[]
+        const routed = await this.remote.subagents.prompt({
+          requestId: effectiveRequestId,
+          childSessionId: this.address.childSessionId,
+          delivery: mode,
+          content: routedContent,
+          clientTimeZone: resolvedClientTimeZone(),
+        }, signal)
+        result = routed.ok ? { ok: true, value: { accepted: true } } : routed
       }
-    } else {
-      // The preceding branch rejects file parts before the narrower subagent
-      // wire type is used; this array is not filtered or reordered.
-      const routedContent = content as Exclude<PromptContentPart, { readonly type: 'file' }>[]
-      const routed = await this.remote.subagents.prompt({
-        requestId: requestId ?? randomUUID() as SessionRequestId,
-        childSessionId: this.address.childSessionId,
-        delivery: mode,
-        content: routedContent,
-        clientTimeZone: resolvedClientTimeZone(),
-      }, signal)
-      result = routed.ok ? { ok: true, value: { accepted: true } } : routed
+    } finally {
+      if (this.pendingPromptReceipts.get(effectiveRequestId) === receipt) this.pendingPromptReceipts.delete(effectiveRequestId)
     }
+    if (receipt.accepted) return { ok: true, value: { accepted: true } }
     if (!result.ok) {
       // Rejection must leave a first prompt blank and eligible for workspace reuse.
       if (firstPrompt) this.firstPromptPendingTurn = false
@@ -443,6 +460,7 @@ export class Session implements SessionFace {
     const request: OlderHistoryRequest = {
       generation: this.openGeneration,
       beforeSeq: this.baseSeq,
+      displayBefore: this.eventSource.getSnapshot().entries[0]?.event.seq,
       page: null,
       invalidated: false,
       recovering: false,
@@ -455,10 +473,12 @@ export class Session implements SessionFace {
       try {
         await events.prepend({ beforeSeq: request.beforeSeq, ...HISTORY_PAGE_OPTIONS })
         if (this.olderRequest !== request) return
-        if (request.invalidated || request.generation !== this.openGeneration || request.beforeSeq !== this.baseSeq) return
+        if (request.invalidated || request.generation !== this.openGeneration
+          || (events instanceof SessionEventStream && request.beforeSeq !== this.baseSeq)) return
         const page = request.page
         const first = page?.entries[0]
-        this.historyLoadStatus = page === null || (first === undefined ? page.hasMore : first.event.seq >= request.beforeSeq)
+        this.historyLoadStatus = page === null
+          || (events instanceof SessionEventStream && (first === undefined ? page.hasMore : first.event.seq >= request.beforeSeq))
           ? 'error' : 'pendingConsumption'
       } catch (error) {
         if (this.olderRequest !== request) return
@@ -467,7 +487,7 @@ export class Session implements SessionFace {
         if (!isRemoteFailure(error)) console.error('[session-controller] loadOlder failed:', error)
       } finally {
         if (this.olderRequest === request) {
-          if (request.invalidated && this.events === events) {
+          if (request.invalidated && events instanceof SessionEventStream && this.events === events) {
             // A replacement restores the transport cursor before another page uses the visible window.
             request.recovering = true
             this.historyLoadStatus = 'loading'
@@ -485,7 +505,7 @@ export class Session implements SessionFace {
     const request = this.olderRequest
     if (request === null || request.consuming || this.historyLoadStatus !== 'pendingConsumption' || request.page === null) return false
     if (this.openState !== 'open' || request.invalidated || request.generation !== this.openGeneration
-      || request.beforeSeq !== this.baseSeq) {
+      || (this.events instanceof SessionEventStream && request.beforeSeq !== this.baseSeq)) {
       this.clearOlderHistory()
       return false
     }
@@ -515,6 +535,8 @@ export class Session implements SessionFace {
 
   /** Jump loader: page backwards until the window covers seq (see ISession.loadThrough). */
   loadThrough(seq: SessionSeq): Promise<void> {
+    if (this.historySource !== undefined) return Promise.reject(new RemoteError('session/external-history-unsupported',
+      'External display positions cannot address a native turn jump', { sessionId: this.sessionId, operation: 'loadThrough' }))
     this.consumeOlder()
     if (this.olderRequest !== null) return Promise.resolve()
     if (this.openState !== 'open' || !this.hasMore || this.baseSeq <= seq) return Promise.resolve()
@@ -586,6 +608,7 @@ export class Session implements SessionFace {
     if (this.openState === 'cold') return // never opened: no window to rebuild (doOpen flips to 'loading' synchronously, so cold implies no in-flight open)
     this.openGeneration++
     this.clearOlderHistory()
+    this.openingAbort?.abort()
     const events = this.events
     this.events = undefined
     await events?.dispose()
@@ -694,9 +717,11 @@ export class Session implements SessionFace {
     }
     this.openGeneration++
     this.clearOlderHistory()
+    this.openingAbort?.abort()
     const events = this.events
     this.events = undefined
     await events?.dispose()
+    await this.openPromise?.catch((_error: unknown) => { /* The opening caller retains its original failure. */ })
   }
 
   // ---- Private ----
@@ -705,18 +730,31 @@ export class Session implements SessionFace {
   private async doOpen(generation: number): Promise<void> {
     this.openState = 'loading'
     this.openError = null
+    this.clearOlderHistory()
     this.notifier.markDirty()
-    const events = new SessionEventStream(this.remote, this.sessionAddress(), {
-      publish: (change) => {
-        if (generation !== this.openGeneration || this.events !== events) return
-        this.acceptEventChange(change)
-      },
-      failed: (error) => {
-        this.failEventStream(events, generation, error)
-      },
-    })
-    this.events = events
+    const abort = this.openingAbort = new AbortController()
+    let events: SessionHistoryEvents | undefined
     try {
+      const info = await this.remote.sessionHistory.info({ address: this.sessionAddress() }, abort.signal)
+      if (generation !== this.openGeneration || abort.signal.aborted) return
+      if (!info.ok) throw info.error
+      if (this.historySource !== undefined && info.value.kind === 'native') throw new RemoteError('session/external-history-unavailable',
+        'The selected external history source is unavailable', { sessionId: this.sessionId })
+      this.historySource = info.value.kind === 'external' ? info.value : undefined
+      events = this.historySource === undefined
+        ? new SessionEventStream(this.remote, this.sessionAddress(), {
+          publish: (change) => {
+            if (generation === this.openGeneration && this.events === events) this.acceptEventChange(change)
+          },
+          failed: (error) => { if (events !== undefined) this.failEventStream(events, generation, error) },
+        })
+        : new ExternalSessionHistory(this.remote, this.sessionAddress(), {
+          publish: (change) => {
+            if (generation === this.openGeneration && this.events === events) this.acceptExternalHistory(change)
+          },
+          failed: (error) => { if (events !== undefined) this.failEventStream(events, generation, error) },
+        })
+      this.events = events
       await events.open(HISTORY_PAGE_OPTIONS)
       if (generation !== this.openGeneration || this.events !== events) return
       this.openState = 'open'
@@ -727,7 +765,68 @@ export class Session implements SessionFace {
       this.openState = 'error'
       this.openError = error
     } finally {
+      if (this.openingAbort === abort) this.openingAbort = undefined
       if (generation === this.openGeneration) this.notifier.markDirty()
+    }
+  }
+
+  private acceptExternalHistory(change: ExternalHistoryChange): void {
+    if (change.type === 'input-accepted') { this.observeExternalReceipts(change.requestIds); return }
+    if (change.entries.length > 0) {
+      const wasBlank = this.blankBit
+      this.blankBit = false
+      this.firstPromptPendingTurn = false
+      if (wasBlank) this.options.onEngaged?.(this)
+    }
+    if (change.type === 'append') {
+      if (this.olderRequest !== null && this.olderRequest.displayBefore === undefined)
+        this.olderRequest.displayBefore = change.entries[0]?.event.seq
+      for (const entry of change.entries) this.eventSource.append(entry)
+      this.notifier.markDirty()
+      return
+    }
+    this.observeExternalReceipts(change.acceptedRequestIds ?? [])
+    if (change.type === 'prepend') {
+      if (this.olderRequest !== null) this.olderRequest.page = { entries: change.entries, hasMore: change.hasMore }
+      else this.prependWindow(change.entries, change.hasMore)
+      return
+    }
+    if (change.type === 'replace') {
+      // The external driver fences stale page cursors against its replacement epoch.
+      this.clearOlderHistory()
+    }
+    let entries = change.entries
+    const pending = this.olderRequest
+    if (change.type === 'patch' && pending?.page !== null && pending?.page !== undefined) {
+      const boundary = pending.displayBefore ?? Number.POSITIVE_INFINITY
+      pending.page = { entries: entries.filter(entry => entry.event.seq < boundary), hasMore: change.hasMore }
+      entries = entries.filter(entry => entry.event.seq >= boundary)
+    }
+    const first = SessionLogOffset(entries[0]?.event.seq ?? this.baseSeq)
+    if (change.type !== 'patch' || pending?.page === null || pending === null) this.hasMore = change.hasMore
+    this.historyWasPartial ||= change.hasMore
+    this.baseSeq = first
+    this.eventSource.replace(entries, this.hasMore)
+    this.notifier.markDirty()
+  }
+
+  private observeExternalReceipts(requestIds: readonly SessionRequestId[]): void {
+    for (const requestId of requestIds) {
+      const receipt = this.pendingPromptReceipts.get(requestId)
+      const firstReceipt = receipt !== undefined && !receipt.accepted
+      if (receipt !== undefined) receipt.accepted = true
+      const settlement = this.submissionSettlements.get(requestId)
+      if (settlement === undefined) {
+        if (firstReceipt) {
+          this.acceptPrompt(undefined)
+          this.firstPromptPendingTurn = false
+        }
+        continue
+      }
+      if (settlement.retiring) continue
+      this.acceptPrompt(requestId)
+      this.firstPromptPendingTurn = false
+      this.scheduleObservedRetirement(requestId, settlement.admitted ?? settlement.receipt?.attachments ?? [])
     }
   }
 
@@ -804,7 +903,7 @@ export class Session implements SessionFace {
     if (result?.type === 'rebaseline') {
       const events = this.events
       queueMicrotask(() => {
-        if (events !== undefined && this.events === events) events.restart()
+        if (events instanceof SessionEventStream && this.events === events) events.restart()
       })
       return
     }
@@ -984,7 +1083,7 @@ export class Session implements SessionFace {
   }
 
   /** Publish a terminal background failure only while this stream still owns the Session. */
-  private failEventStream(events: SessionEventStream, generation: number, error: unknown): void {
+  private failEventStream(events: SessionHistoryEvents, generation: number, error: unknown): void {
     if (generation !== this.openGeneration || this.events !== events) return
     if (!isRemoteFailure(error)) throw error
     this.openGeneration++
@@ -1017,6 +1116,7 @@ export class Session implements SessionFace {
       historyWasPartial: this.historyWasPartial,
       loadingOlder: this.loadingOlder,
       historyLoadStatus: this.historyLoadStatus,
+      ...(this.historySource === undefined ? {} : { historySource: this.historySource }),
       promptError: this.promptError,
       blank: this.blankBit,
       lastAgentError: this.lastAgentError,

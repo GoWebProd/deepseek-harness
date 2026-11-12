@@ -41,7 +41,7 @@ interface TurnProcessState {
 type ConversationEvent = Parameters<ConversationNodeDefinition['match']>[0]
 
 function eventTurn(event: ConversationEvent): number | undefined {
-  const data = event.data as unknown as { turn?: unknown }
+  const data = (event.data ?? {}) as { turn?: unknown }
   return typeof data.turn === 'number' ? data.turn : undefined
 }
 

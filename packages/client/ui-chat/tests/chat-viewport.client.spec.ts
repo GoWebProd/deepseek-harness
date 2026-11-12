@@ -174,6 +174,23 @@ it.each([
   expect(measurements).toBeLessThanOrEqual(Math.ceil(Math.log2(count)) + 1)
 })
 
+it('retains the preceding external message while reading unmarked tool rows', () => {
+  const h = fixture()
+  const rows = Array.from({ length: 40 }, (_, index) => {
+    const row = h.row(h.column, `row-${index}`, index * 100)
+    delete row.dataset.chatTurn
+    return row
+  })
+  for (const index of [0, 5, 30]) rows[index]!.dataset.chatTurn = String(index * 1_000_000)
+  h.viewport.updateTurns([0, 5, 30].map(index => ({
+    kind: 'message', turn: index * 1_000_000, anchorKey: `row-${index}`, prompt: '', response: '',
+  })))
+  h.column.scrollTop = 1600
+  expect(h.viewport.readVisibleTurn()).toBe(5_000_000)
+  h.column.scrollTop = 3200
+  expect(h.viewport.readVisibleTurn()).toBe(30_000_000)
+})
+
 it('uses outer group geometry and keeps the preceding Turn in a gap', () => {
   const h = fixture()
   h.row(h.column, 'first', 0)

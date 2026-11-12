@@ -3,6 +3,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
+import { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type {
@@ -1103,10 +1105,17 @@ describe('small branch tails', () => {
     }] as const
     const snap = chatSnapshotFixture({ nodes })
     const source = { getSnapshot: () => snap, subscribe: () => () => {} }
+    const session: SessionSnapshot = {
+      sessionId: SessionId('stats-native-session'), pendingSubmissions: [], running: false, subagent: null,
+      removed: false, openState: 'open', openError: null, hasMore: false, loadingOlder: false,
+      historyWasPartial: false, historyLoadStatus: 'idle',
+      promptError: null, blank: false, lastAgentError: null, promptAttempted: true, awaitingFirstTurn: false,
+    }
     const pillProps: StatPillProps = {
       usePerformanceUsage: selector => selector('detailed'),
       t,
       useChat: bindSnapshotSelector(source),
+      useSession: bindSnapshotSelector({ getSnapshot: () => session, subscribe: () => () => {} }),
       useProjection: (key: string) => key === 'tokenUsage'
         ? { uncachedInputTokens: 0, outputTokens: 10, cacheReadTokens: 0, cacheWriteTokens: 0 }
         : undefined,

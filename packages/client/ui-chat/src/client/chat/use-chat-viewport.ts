@@ -749,10 +749,16 @@ export class ChatViewport {
       const row = rows[middle] as Element
       if (row.getBoundingClientRect().top > line) high = middle
       else {
-        const value = row.getAttribute('data-chat-turn')
-        const turn = value === null ? NaN : Number(value)
-        if (Number.isSafeInteger(turn)) reading = turn
         low = middle + 1
+      }
+    }
+    // External tool rows have no message mark; retain the nearest preceding anchor.
+    for (let index = low - 1; index >= 0; index--) {
+      const value = rows[index]?.getAttribute('data-chat-turn')
+      const turn = value == null ? NaN : Number(value)
+      if (Number.isSafeInteger(turn)) {
+        reading = turn
+        break
       }
     }
     return reading

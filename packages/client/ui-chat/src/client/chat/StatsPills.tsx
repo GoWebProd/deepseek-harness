@@ -8,7 +8,7 @@ import { memo, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { IconDatabaseOutlineRegular, IconGaugeOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { InjectFace, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsRuntime, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: merges the sessionStats key into SessionProjectionMap for useProjection.
 import type {} from '@deepseek-ai/dsh-session-stats/client'
 import type { TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
@@ -122,7 +122,7 @@ export function billedInputTokens(usage: TokenUsageProjection): number {
 type Translate = ChatViewSlotProps['t']
 
 /** Props shared by every composer stats pill: the conversation-snapshot selector plus the projection read seat. */
-export interface StatPillProps extends InjectFace<PerformanceUsageInjected> {
+export interface StatPillProps extends InjectFace<PerformanceUsageInjected>, Pick<PropsRuntime<'conversation.composer.dock'>, 'useSession'> {
   useChat: SnapshotSelectorHook<ChatSnapshot>
   useProjection: UseProjection
   /** The owning dock's locale seat. */
@@ -248,9 +248,11 @@ function DialogPill({ stat, icon, label, text, title, titleValue, children }: Pi
  * Turn and step counts with whole-session speed, opening the time and speed
  * dialog; Compact keeps only the speed reading.
  */
-export const ActivityPill = memo(function ActivityPill({ useChat, useProjection, usePerformanceUsage, t }: StatPillProps) {
+export const ActivityPill = memo(function ActivityPill({ useChat, useProjection, usePerformanceUsage, useSession, t }: StatPillProps) {
+  const externalHistory = useSession(state => state.historySource?.kind === 'external')
   const mode = usePerformanceUsage(value => value)
   const stats = useSessionStats(useChat, useProjection)
+  if (externalHistory) return null
   const speed = stats.decodeMs > 0 ? decodeSpeed(stats, t) : null
   const icon = <IconGaugeOutlineRegular />
   if (mode === 'compact') return speed === null ? null : <PlainPill stat="activity" icon={icon} {...reading(speed, null)} />
@@ -294,9 +296,11 @@ export const ActivityPill = memo(function ActivityPill({ useChat, useProjection,
 })
 
 /** Whole-log token total and cache hit; Compact keeps only the cache hit. */
-export const UsagePill = memo(function UsagePill({ useProjection, usePerformanceUsage, t }: StatPillProps) {
+export const UsagePill = memo(function UsagePill({ useProjection, usePerformanceUsage, useSession, t }: StatPillProps) {
+  const externalHistory = useSession(state => state.historySource?.kind === 'external')
   const mode = usePerformanceUsage(value => value)
   const usage = useProjection('tokenUsage')
+  if (externalHistory) return null
   // Gated on actual token activity: a session whose steps all settled without
   // billing (e.g. every request failed) shows no usage pill.
   if (usage === undefined || (billedInputTokens(usage) === 0 && usage.outputTokens === 0)) return null

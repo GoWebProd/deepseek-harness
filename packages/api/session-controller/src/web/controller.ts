@@ -31,6 +31,7 @@ export class WebController {
    */
   async *follow(request: SessionFollowRequest, signal: AbortSignal): AsyncIterable<SessionFollowFrame> {
     const sessionId = addressId(request.address)
+    await this.historyController.assertNative(sessionId, 'follow', signal)
     const spec = resolveHistoryRequest(request)
     using queue = new ListenerBuffer<SessionFollowFrame>(this.ctx, signal)
     using listener = new EventListener(this.ctx, sessionId, signal, queue)

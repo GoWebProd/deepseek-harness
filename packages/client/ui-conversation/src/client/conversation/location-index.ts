@@ -138,7 +138,7 @@ const SESSION_LOCATION = { kind: 'session' } as const
 const UNRESOLVED_LOCATION = { kind: 'unresolved' } as const
 
 function payloadCoordinates(event: SessionEventLike): Coordinates {
-  const data = event.data as unknown as { turn?: unknown; step?: unknown }
+  const data = (event.data ?? {}) as { turn?: unknown; step?: unknown }
   if (data.turn === null) return { session: true, location: undefined }
   const turn = Number.isSafeInteger(data.turn) && (data.turn as number) >= 0
     ? data.turn as number

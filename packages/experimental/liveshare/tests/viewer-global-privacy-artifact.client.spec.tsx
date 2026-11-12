@@ -205,7 +205,7 @@ describe('Assembled viewer page global configuration privacy', () => {
     await waitFor(() => { expect(document.querySelector('[data-liveshare-viewer-seat="model"]')?.textContent).toMatch(/deepseek/iu) })
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: earlier })) })
     await waitFor(() => { expect(document.body.textContent).toContain('问题 50') }, { timeout: 15_000 })
-    expect(relay.ordinaryCalls).toEqual(expect.arrayContaining(['session/page', 'session/attachment', 'session/modelCatalog']))
+    expect(relay.ordinaryCalls).toEqual(expect.arrayContaining(['sessionHistory/info', 'session/page', 'session/attachment', 'session/modelCatalog']))
 
     expect(context.get('remoteAccess')?.source('session', 'fx-alpha', 'session/prompt').getSnapshot()).toBe(true)
     const stopLabel = locale === 'zh' ? '停止生成' : 'Stop generating'

@@ -1,8 +1,12 @@
 /** Original log coordinates submitted for target-owned Chat reveal. */
 
-import type { SessionEventLike } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { IgnorablePluginRecordEvent, SessionEventLike } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { InspectorChatTarget } from '../objects.ts'
+
+function isIgnorablePluginRecordEvent(event: SessionEventLike): event is IgnorablePluginRecordEvent {
+  return event.type.startsWith('plugin:') && 'ignorable' in event && event.ignorable
+}
 
 /** Original owning event and, for an Assistant child row, its selected stream chunk. */
 export interface SessionLogAnchor {
@@ -24,6 +28,7 @@ function partOf(chunk: StreamChunk | undefined): string | undefined {
  */
 export function sessionLogChatTarget(anchor: SessionLogAnchor): InspectorChatTarget {
   const { event, chunk } = anchor
+  if (isIgnorablePluginRecordEvent(event)) return { anchorSeq: event.seq }
   const data = event.data
   const turn = 'turn' in data && typeof data.turn === 'number' ? data.turn : undefined
   const step = 'step' in data && typeof data.step === 'number' ? data.step : undefined

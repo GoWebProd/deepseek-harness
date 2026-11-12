@@ -59,6 +59,7 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'session/observeProjections': 'reader-session-read', // the page follows visible Session projections
   'session/observeState': 'reader-session-read', // the page follows a visible Session's passive state
   'session/state': 'reader-session-read', // the page reads a visible Session's passive state
+  'sessionHistory/info': 'reader-session-read', // the page selects the history source of one visible Session
   'session/wait': 'reader-session-read', // the page waits on a visible Session's passive state
   'toolResults/watch': 'reader-session-read', // the page inspects retained tool results of a visible Session
 
@@ -104,6 +105,8 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'session/search': 'owner-only', // owner searches across Sessions
   'session/selectModel': 'owner-only', // owner selects a Session model
   'session/updateQueue': 'owner-only', // owner edits queued input
+  'sessionHistory/page': 'owner-only', // external history sharing needs its own permission policy
+  'sessionHistory/observe': 'owner-only', // external history sharing needs its own permission policy
   'session/workspacePathApplications': 'owner-only', // owner applies a Workspace path
   'credentials/describe': 'owner-only', // owner credentials; secrets never reach a reader
   'credentials/set': 'owner-only', // owner credentials; secrets never reach a reader
