@@ -25,6 +25,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type { createChatStore } from '../stores.ts'
 import type { ChatPresentationPolicy } from '../presentation-policy.ts'
+import type { DisplayProcessOwnerProps } from './display-process.ts'
 import type { FlowMotionRows } from '../chat/flow-motion.ts'
 import type { ToolCallId } from './store.ts'
 import type { ChatConversationViewNode, ChatNode, ChatNodeKind } from './chat-nodes.ts'
@@ -255,6 +256,8 @@ export interface ChatNodeOwnerProps {
   loadImage: MessageImageLoader
   /** Turn-process state when this Node belongs to a projected Turn. */
   turnProcess?: TurnProcessOwnerProps | undefined
+  /** Display-only work disclosure, without Engine Turn data. */
+  displayProcess?: DisplayProcessOwnerProps | undefined
 }
 
 /** One attachment in the original user-message display order. */

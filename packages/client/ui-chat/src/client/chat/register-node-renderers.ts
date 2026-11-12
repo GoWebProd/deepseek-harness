@@ -13,6 +13,7 @@ import {
 import { DefaultReasoningBody, ReasoningContent } from './ReasoningContent.tsx'
 import { SystemPromptNodeView } from './SystemPromptRow.tsx'
 import { TurnProcessNodeView } from './TurnProcessNodeView.tsx'
+import { DisplayProcessNodeView } from './DisplayProcessNodeView.tsx'
 import { TurnTailNodeView } from './TurnTailNodeView.tsx'
 import { TurnTriggerNodeView } from './TurnTriggerNodeView.tsx'
 
@@ -89,6 +90,8 @@ export function registerChatNodeRenderers(
     { name: 'conversation.chat.node', key: 'turn-max-tokens', locale: NS }, TurnMaxTokensNodeView))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(
     { name: 'conversation.chat.node', key: 'turn-process', locale: NS }, TurnProcessNodeView))
+  ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(
+    { name: 'conversation.chat.node', key: 'display-process', locale: NS }, DisplayProcessNodeView))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
     name: 'conversation.chat.node',
     key: 'turn-tail',

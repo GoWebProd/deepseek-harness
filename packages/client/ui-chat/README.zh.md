@@ -123,6 +123,8 @@ Chat 末尾为进行中的 Turn 控制行，且该轮尚无可见输入时，第
 <a id="grouped-rendering"></a>
 ## 分组渲染
 
+外部展示 Definition 可在 Session 层 Chat 节点上声明 `displayWork: { source, tailStatus? }`，接入工作详情折叠。来源只在末尾节点携带后端运行状态；状态缺失或未知时，最新一组保持展开。Chat Builder 按来源和用户消息边界组织已加载节点，保留节点 key 和消息导航，并提供仅用于展示的折叠控件。完成时/下次消息时折叠、全部/最终回复、手动展开及完全展开模式共用现有 Chat 偏好。运行中、停止和失败的工作保持展开。此机制不创建 Engine Turn、Step、时长或模型请求证据；分页补入真实输入时，开头的局部组会重新归组。流式文本复用已有摘要，不扫描完整历史。
+
 Chat 通过 `uiConversation.groups` 注册过程 Group Definition。React 通过稳定的 Group 与 Node 容器渲染混合 `node`/`group` 根序列，组头数据与成员数组分别订阅。已结束组的标题独立于实时详情偏好，只有运行中的标题在该偏好变化时更新。[过程分组业务规则](src/client/conversation-nodes/README.zh.md#process-grouping) 定义切分方式与活动摘要。
 
 `groupPart` 在 Assistant 渲染器中选择推理或回复，不复制 Node 载荷。同一个 callId 的准备、派发与结果阶段由 Tool 节点自己拥有。每个部分有独立的 DOM 锚点用于恢复阅读位置；轮次导航使用原 Node key，落到它的第一个可见部分。展示模式切换以及为完整旧组补入更早成员时，保留组来源、成员父级及 key。原 Node Store 仍是唯一节点数据所有者，替换 Builder 时重新绑定按键订阅，不重挂载容器。模式变化保留尺寸观察器，并复用整轮状态选择器。
