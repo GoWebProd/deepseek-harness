@@ -40,12 +40,15 @@ export function registerChatNodeRenderers(
   }, DefaultReasoningBody))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
     name: 'conversation.chat.node', key: 'user', locale: NS,
-    children: { 'conversation.chat.user.before': { kind: 'chain', scope: 'session' } },
+    children: {
+      'conversation.chat.user.before': { kind: 'chain', scope: 'session' },
+      'conversation.chat.user.actions': { kind: 'list', scope: 'session' },
+    },
   }, UserMessageNodeView))
   // Steering rows share the renderer without owning the message-source seat.
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
     name: 'conversation.chat.node', key: 'steering', locale: NS,
-    inject: () => ({ renderSlotChain: () => null }),
+    inject: () => ({ renderSlotChain: () => null, renderSlot: () => null }),
   }, UserMessageNodeView))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(
     { name: 'conversation.chat.node', key: 'context', locale: NS }, ContextMessageNodeView))
@@ -60,6 +63,7 @@ export function registerChatNodeRenderers(
     children: {
       'conversation.chat.reasoning.body': { kind: 'single', scope: 'session' },
       'conversation.chat.message.images': { kind: 'single', scope: 'session' },
+      'conversation.chat.assistant.actions': { kind: 'list', scope: 'session' },
     },
     inject: (sessionId): AssistantNodeInjected => ({
       hooks: { presentation },

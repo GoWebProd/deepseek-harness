@@ -16,7 +16,7 @@ import type {
   ChatViewSlotProps, CommandNode, CompactionSummaryNode, ContextMessageNode, ConversationNode,
   LegacyConversationSlice, ModelRetryNode, StartedToolCall, SteeringMessageNode,
   ToolCallBlock, ToolResultNode, TurnErrorNode, TurnMaxTokensNode,
-  TranscriptViewMode, UserContentInput, UserMessageNode,
+  TranscriptViewMode, UserContentInput, UserMessageNode, ReasoningBodyOwnerProps,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {
   SessionListState, SessionSnapshot,
@@ -279,6 +279,11 @@ function isImageOwner(owner: object): owner is MessageImagesOwnerProps {
     && 'loadImage' in owner && typeof owner.loadImage === 'function'
     && 'align' in owner && (owner.align === 'start' || owner.align === 'end')
 }
+function isReasoningOwner(owner: object): owner is ReasoningBodyOwnerProps {
+  return 'rawText' in owner && typeof owner.rawText === 'string'
+    && 'text' in owner && typeof owner.text === 'string'
+    && 'running' in owner && typeof owner.running === 'boolean'
+}
 type ToolOwner = Pick<ChatNodeOwnerProps, 'openFile' | 'inspectCall'> & {
   readonly callId: string
   readonly toolName: string
@@ -335,9 +340,9 @@ function HarnessChatNode({
   const nodeProps = { ...shared, ...owner, ...hooks }
   switch (owner.node.kind) {
     case 'user':
-      return <UserMessageNodeView {...nodeProps} node={owner.node} renderSlotChain={renderUserChain} />
+      return <UserMessageNodeView {...nodeProps} node={owner.node} renderSlotChain={renderUserChain} renderSlot={() => null} />
     case 'steering':
-      return <UserMessageNodeView {...nodeProps} node={owner.node} renderSlotChain={() => null} />
+      return <UserMessageNodeView {...nodeProps} node={owner.node} renderSlotChain={() => null} renderSlot={() => null} />
     case 'context':
       return <ContextMessageNodeView {...nodeProps} node={owner.node} />
     case 'assistant-step':
@@ -464,14 +469,19 @@ function makeHarness(
   const useOriginRenderer = bindSnapshotSelector(originRenderer)
   let nodeSlotOverride: NodeRenderer | undefined
   let imageSlotOverride: ImageRenderer | undefined
+  let assistantActions: ((owner: object) => React.ReactNode) | undefined
   const renderImages = (name: string, owner: object, options?: { fallback?: React.ReactNode }) => {
     if ((name !== 'conversation.chat.user.images' && name !== 'conversation.chat.message.images') || !isImageOwner(owner)) {
       throw new Error(`Unexpected Chat image Slot: ${name}`)
     }
     return imageSlotOverride?.(owner) ?? options?.fallback ?? null
   }
-  const renderAssistantSlot: React.ComponentProps<typeof AssistantNodeView>['renderSlot'] = (name, owner, options) =>
-    name === 'conversation.chat.message.images' ? renderImages(name, owner, options) : renderReasoningSlot(name, owner, options)
+  const renderAssistantSlot: React.ComponentProps<typeof AssistantNodeView>['renderSlot'] = (name, owner, options) => {
+    if (name === 'conversation.chat.assistant.actions') return assistantActions?.(owner) ?? null
+    if (name === 'conversation.chat.message.images') return renderImages(name, owner, options)
+    if (!isReasoningOwner(owner)) throw new Error(`Unexpected reasoning owner: ${name}`)
+    return renderReasoningSlot('conversation.chat.reasoning.body', owner, options)
+  }
   const renderNodeSlot: NodeRenderer = (key, owner, opts) => {
     if (nodeSlotOverride !== undefined) return nodeSlotOverride(key, owner, opts)
     return <HarnessChatNode standard={props} owner={owner}
@@ -616,6 +626,7 @@ function makeHarness(
     setFoldedReplies: (replies: FoldedReplies) => { foldedReplies.set(replies) },
     setNodeRenderer: (renderer: NodeRenderer) => { nodeSlotOverride = renderer },
     setImageRenderer: (renderer: ImageRenderer) => { imageSlotOverride = renderer },
+    setAssistantActions: (renderer: (owner: object) => React.ReactNode) => { assistantActions = renderer },
     setOriginRenderer: (renderer: UserChainRenderer | undefined) => { originRenderer.set({ renderer }) },
   }
 }
@@ -4915,4 +4926,60 @@ it('does not infer menu targets from links or data attributes inside a plugin fl
   fireEvent.contextMenu(view.getByRole('button', { name: 'Custom target' }))
   expect(custom).toHaveBeenCalledOnce()
   expect(h.props.resolveFilePath).not.toHaveBeenCalled()
+})
+
+function sessionMessageFixture(running = false): ChatNode[] {
+  const base = { target: 'chat' as const, location: { kind: 'session' as const }, visibility: 'visible' as const }
+  return [
+    { ...base, key: 'action:user', id: 'user', kind: 'user', anchorSeq: 0, data: user(0, 'Question') },
+    { ...base, key: 'action:answer', id: 'answer', kind: 'assistant-step', anchorSeq: 1,
+      data: { status: running ? 'running' : 'settled', turn: 0, step: 0,
+        blocks: [{ kind: 'reasoning', text: 'Reasoning' }, { kind: 'text', text: 'Answer' }], time: 1,
+        ...running ? {} : { finalNode: assistant(1, 'Answer', 0, 0) } } },
+  ]
+}
+
+describe('session-scoped assistant actions', () => {
+  it('places finalized actions once beside Copy with the original display source', () => {
+    const raw = sessionMessageFixture()
+    const answer = raw.find(node => node.id === 'answer') as ChatNode<'assistant-step'>
+    const source = { kind: 'plugin', cursor: 'answer-cursor' }
+    const messageId = MessageId('plugin-answer')
+    const nodes = raw.map(node => node === answer ? { ...answer, data: { ...answer.data, source,
+      finalNode: { ...answer.data.finalNode!, messageId },
+    } } : node)
+    const snapshot = new ChatSnapshotBuilder().replace({ nodes, timeline: { turnOrder: [], turns: new Map<number, TurnLocation>() } })
+    const h = makeHarness({}, {}, snapshot)
+    const selected: object[] = []
+    const branch = vi.fn()
+    h.setAssistantActions((owner) => {
+      selected.push(owner)
+      return <button type="button" aria-label="Plugin branch" onClick={branch} />
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const row = view.container.querySelector<HTMLElement>('[data-chat-node-key="action:answer"]')!
+    const action = within(row).getByRole('button', { name: 'Plugin branch' })
+    const copy = within(row).getByRole('button', { name: '复制' })
+    expect(action.closest('[data-clock]')).toBe(copy.closest('[data-clock]'))
+    expect(selected.filter(owner => 'source' in owner && owner.source === source)).toEqual([{ messageId, source }])
+    fireEvent.click(action)
+    expect(branch).toHaveBeenCalledOnce()
+    expect(h.forkAt).not.toHaveBeenCalled()
+    expect([...row.querySelectorAll('button[aria-label]')].map(button => button.getAttribute('aria-label'))).toMatchInlineSnapshot(`
+      [
+        "复制",
+        "Plugin branch",
+      ]
+    `)
+  })
+
+  it('omits finalized actions while the answer is still streaming', () => {
+    const snapshot = new ChatSnapshotBuilder().replace({
+      nodes: sessionMessageFixture(true), timeline: { turnOrder: [], turns: new Map<number, TurnLocation>() },
+    })
+    const h = makeHarness({}, {}, snapshot)
+    h.setAssistantActions(() => <button type="button" aria-label="Plugin branch" />)
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.queryByRole('button', { name: 'Plugin branch' })).toBeNull()
+  })
 })

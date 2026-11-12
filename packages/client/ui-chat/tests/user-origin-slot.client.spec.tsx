@@ -6,7 +6,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, fireEvent, render } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -22,7 +22,7 @@ import { unusedImageLoader } from './reasoning-component-fixture.tsx'
 afterEach(cleanup)
 
 const t: ChatNodeViewProps['t'] = makeTranslate(zh, commonZh)
-type UserSlots = PropsRenderSlots<'conversation.chat.user.before'>
+type UserSlots = PropsRenderSlots<'conversation.chat.user.before' | 'conversation.chat.user.actions'>
 const userSlots: UserSlots = {
   renderSlot: () => null,
   renderSlotChain: (_key, _owner, opts) => opts?.fallback ?? null,
@@ -124,7 +124,7 @@ describe('official user renderer origin seat', () => {
     const renderSlotChain = vi.fn(() => <span data-test-origin="" />)
     const view = render(<>
       <UserMessageNodeView {...viewProps(userData)} {...userSlots} renderSlotChain={renderSlotChain} />
-      <UserMessageNodeView {...viewProps(steeringData)} renderSlotChain={() => null} />
+      <UserMessageNodeView {...viewProps(steeringData)} renderSlotChain={() => null} renderSlot={() => null} />
     </>)
     const steeringRow = view.container.lastElementChild!
     expect(steeringRow.textContent).toContain('steer')
@@ -135,5 +135,26 @@ describe('official user renderer origin seat', () => {
     expect(view.container.querySelectorAll('[data-test-origin]')).toHaveLength(1)
     expect(steeringRow.querySelector('[data-test-origin]')).toBeNull()
     expect(view.container.querySelector('[data-chat-steering-batch]')).toBeNull()
+  })
+
+  it('places contributed user actions beside Copy with the exact message source and text', () => {
+    const edit = vi.fn()
+    const renderSlot = vi.fn(() => <button type="button" aria-label="Edit" onClick={edit} />)
+    const view = render(<UserMessageNodeView {...viewProps(userData)} {...userSlots} renderSlot={renderSlot} />)
+    const copy = view.getByRole('button', { name: '复制' })
+    const button = view.getByRole('button', { name: 'Edit' })
+    expect(copy.closest('[data-clock]')).toBe(button.closest('[data-clock]'))
+    expect(renderSlot).toHaveBeenCalledWith('conversation.chat.user.actions', {
+      messageId: userData.messageId, source: SHARED, text: 'hello',
+    })
+    fireEvent.click(button)
+    expect(edit).toHaveBeenCalledOnce()
+  })
+
+  it('omits durable user actions from steering rows', () => {
+    const renderSlot = vi.fn(() => <button type="button" aria-label="Edit" />)
+    const view = render(<UserMessageNodeView {...viewProps(steeringData)} {...userSlots} renderSlot={renderSlot} />)
+    expect(renderSlot).not.toHaveBeenCalled()
+    expect(view.queryByRole('button', { name: 'Edit' })).toBeNull()
   })
 })
